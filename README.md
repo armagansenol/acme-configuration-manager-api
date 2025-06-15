@@ -98,44 +98,23 @@ You can deploy to Render in two ways:
 
 #### Method 2: Infrastructure as Code with `render.yaml`
 
-1.  **Add `render.yaml` to your repository root**:
-    Create a file named `render.yaml` with the content below. This file tells Render exactly how to build and run your service.
-
-    ```yaml
-    services:
-      - type: web
-        name: acme-config-api
-        env: node
-        region: oregon
-        plan: free
-        buildCommand: "npm install && npm run build"
-        startCommand: "npm start"
-        healthCheckPath: /health
-        envVars:
-          - key: NODE_ENV
-            value: production
-          - key: PORT
-            value: 10000
-          - key: FIREBASE_PROJECT_ID
-            fromSecret: FIREBASE_PROJECT_ID
-          - key: FIREBASE_PRIVATE_KEY_ID
-            fromSecret: FIREBASE_PRIVATE_KEY_ID
-          - key: FIREBASE_PRIVATE_KEY
-            fromSecret: FIREBASE_PRIVATE_KEY
-          - key: FIREBASE_CLIENT_EMAIL
-            fromSecret: FIREBASE_CLIENT_EMAIL
-          - key: FIREBASE_CLIENT_ID
-            fromSecret: FIREBASE_CLIENT_ID
-          - key: MOBILE_API_KEY
-            fromSecret: MOBILE_API_KEY
-          - key: ALLOWED_ORIGINS
-            fromSecret: ALLOWED_ORIGINS
-    ```
+1.  **Update the `render.yaml` file**:
+    The `render.yaml` file is already included in your repository with placeholder values. Before deploying, you need to replace the placeholder values with your actual credentials:
+    
+    *   Replace `your-project-id` with your Firebase project ID
+    *   Replace `your-private-key-id` with your Firebase private key ID
+    *   Replace `YOUR_PRIVATE_KEY_HERE` with your actual Firebase private key (keep the `-----BEGIN PRIVATE KEY-----` wrapper)
+    *   Replace `firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com` with your Firebase client email
+    *   Replace `your-client-id` with your Firebase client ID
+    *   Replace `your-secret-mobile-api-key-minimum-32-characters-long` with your API key
+    *   Replace `https://your-frontend-domain.com` with your frontend domain
 
 2.  **Create a New "Blueprint" Service**:
     *   Go to the [Render Dashboard](https://dashboard.render.com/) and click "New" > "Blueprint".
     *   Select your repository. Render will automatically detect and use the `render.yaml` file.
-    *   You will be prompted to create the Environment Variables (as secrets) that are referenced in the `render.yaml` (`FIREBASE_PROJECT_ID`, etc.).
+    *   Review the configuration and click "Apply" to deploy.
+
+**Security Note**: The `render.yaml` method puts your credentials directly in the file. For better security, consider using Method 1 (Dashboard) where you can add sensitive values as environment variables through the UI.
 
 ## 🔐 Authentication
 

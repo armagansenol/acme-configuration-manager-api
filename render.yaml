@@ -13,16 +13,16 @@ services:
       - key: PORT
         value: 10000
       - key: FIREBASE_PROJECT_ID
-        fromSecret: FIREBASE_PROJECT_ID
+        value: your-project-id
       - key: FIREBASE_PRIVATE_KEY_ID
-        fromSecret: FIREBASE_PRIVATE_KEY_ID
+        value: your-private-key-id
       - key: FIREBASE_PRIVATE_KEY
-        fromSecret: FIREBASE_PRIVATE_KEY
+        value: "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----\n"
       - key: FIREBASE_CLIENT_EMAIL
-        fromSecret: FIREBASE_CLIENT_EMAIL
+        value: firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
       - key: FIREBASE_CLIENT_ID
-        fromSecret: FIREBASE_CLIENT_ID
+        value: your-client-id
       - key: MOBILE_API_KEY
-        fromSecret: MOBILE_API_KEY
+        value: your-secret-mobile-api-key-minimum-32-characters-long
       - key: ALLOWED_ORIGINS
-        fromSecret: ALLOWED_ORIGINS 
+        value: https://your-frontend-domain.com 
