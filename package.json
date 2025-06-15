@@ -11,7 +11,7 @@
         "vercel-build": "npm run build",
         "lint": "eslint src/**/*.ts",
         "lint:fix": "eslint src/**/*.ts --fix",
-        "clean": "rimraf dist"
+        "clean": "npx rimraf dist"
     },
     "keywords": [
         "configuration-management",
