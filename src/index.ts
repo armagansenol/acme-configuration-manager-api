@@ -23,7 +23,6 @@ if (!process.env.NODE_ENV) {
 
 logger.startup("ACME Configuration Manager API starting...")
 logger.startup(`Environment: ${process.env.NODE_ENV}`)
-logger.startup("🔥 Using Node.js native watching (no nodemon needed!)")
 
 // Initialize Firebase
 import "./config/firebase"
@@ -93,6 +92,29 @@ if (isDevelopment) {
     })
   )
 }
+
+// Root endpoint - API documentation
+app.get("/", (req, res) => {
+  res.status(200).json({
+    name: "ACME Configuration Manager API",
+    version: "1.0.0",
+    description: "A robust configuration management API for dynamic application parameters",
+    endpoints: {
+      health: "GET /health - Health check",
+      parameters: {
+        list: "GET /api/parameters - Get all parameters (Firebase Auth required)",
+        create: "POST /api/parameters - Create parameter (Firebase Auth required)",
+        update: "PUT /api/parameters/:id - Update parameter (Firebase Auth required)",
+        delete: "DELETE /api/parameters/:id - Delete parameter (Firebase Auth required)",
+      },
+      clientConfig: "GET /api/client-config - Get client configuration (API Key required in x-api-key header)",
+    },
+    authentication: {
+      firebase: "Include 'Authorization: Bearer <firebase-token>' header",
+      apiKey: "Include 'x-api-key: <your-api-key>' header",
+    },
+  })
+})
 
 // Health check endpoint
 app.get("/health", (req, res) => {
