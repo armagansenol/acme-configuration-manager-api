@@ -57,36 +57,65 @@ A robust, production-ready configuration management API for dynamic application 
    npm run dev
    ```
 
-## 🚀 Vercel Deployment
+## 🚀 Google Cloud Run Deployment
 
-### One-Click Deploy
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/acme-configuration-manager-api)
+### Prerequisites
+- Google Cloud SDK installed
+- Docker installed
+- Google Cloud project with Billing enabled
+- Cloud Run API enabled
 
-### Manual Deployment
+### Deployment Steps
 
-1. **Install Vercel CLI:**
+1. **Install Google Cloud SDK:**
    ```bash
-   npm i -g vercel
+   # macOS
+   brew install google-cloud-sdk
+   
+   # Or download from: https://cloud.google.com/sdk/docs/install
    ```
 
-2. **Login to Vercel:**
+2. **Login to Google Cloud:**
    ```bash
-   vercel login
+   gcloud auth login
+   gcloud config set project YOUR_PROJECT_ID
    ```
 
-3. **Deploy:**
+3. **Enable required APIs:**
    ```bash
-   vercel --prod
+   gcloud services enable cloudbuild.googleapis.com
+   gcloud services enable run.googleapis.com
    ```
 
-### Environment Variables in Vercel
+4. **Create Dockerfile** (add to project root):
+   ```dockerfile
+   FROM node:18-alpine
+   WORKDIR /app
+   COPY package*.json ./
+   RUN npm ci --only=production
+   COPY . .
+   RUN npm run build
+   EXPOSE 8080
+   CMD ["npm", "start"]
+   ```
 
-Configure these environment variables in your Vercel dashboard:
+5. **Deploy to Cloud Run:**
+   ```bash
+   gcloud run deploy acme-config-api \
+     --source . \
+     --platform managed \
+     --region us-central1 \
+     --allow-unauthenticated
+   ```
+
+### Environment Variables in Google Cloud Run
+
+Configure these environment variables in your Cloud Run service:
 
 ```bash
 # Server Configuration
 NODE_ENV=production
-PORT=3000
+PORT=8080
 
 # Firebase Configuration
 FIREBASE_PROJECT_ID=your-project-id
@@ -102,11 +131,20 @@ FIREBASE_CLIENT_CERT_URL=https://www.googleapis.com/robot/v1/metadata/x509/fireb
 MOBILE_API_KEY=your-secret-mobile-api-key-minimum-32-characters-long
 
 # CORS Configuration
-ALLOWED_ORIGINS=https://your-frontend-domain.com,https://your-app.vercel.app
+ALLOWED_ORIGINS=https://your-frontend-domain.com,https://your-app-hash-uc.a.run.app
 
 # Rate Limiting
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
+```
+
+**Set environment variables using gcloud CLI:**
+```bash
+gcloud run services update acme-config-api \
+  --set-env-vars NODE_ENV=production,PORT=8080,FIREBASE_PROJECT_ID=your-project-id \
+  --set-env-vars MOBILE_API_KEY=your-secret-key \
+  --set-env-vars ALLOWED_ORIGINS=https://your-frontend-domain.com \
+  --region us-central1
 ```
 
 ## 🔐 Authentication
@@ -114,13 +152,13 @@ RATE_LIMIT_MAX_REQUESTS=100
 ### Firebase Authentication (Admin Operations)
 ```bash
 curl -H "Authorization: Bearer <firebase-token>" \
-     https://your-api.vercel.app/api/parameters
+     https://acme-config-api-hash-uc.a.run.app/api/parameters
 ```
 
 ### API Key Authentication (Client Access)
 ```bash
 curl -H "x-api-key: your-api-key" \
-     https://your-api.vercel.app/api/client-config?country=US
+     https://acme-config-api-hash-uc.a.run.app/api/client-config?country=US
 ```
 
 ## 📊 Parameter Structure
@@ -185,7 +223,7 @@ src/
 ✅ **Rate Limiting**: Protection against abuse  
 ✅ **CORS**: Configurable cross-origin policies  
 ✅ **TypeScript**: Full type safety  
-✅ **Serverless Ready**: Optimized for Vercel deployment  
+✅ **Cloud Ready**: Optimized for Google Cloud Run deployment  
 
 ## 📄 License
 
