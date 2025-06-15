@@ -34,6 +34,10 @@
       "@/config/*": ["src/config/*"]
     }
   },
+  "ts-node": {
+    "transpileOnly": true,
+    "files": true
+  },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

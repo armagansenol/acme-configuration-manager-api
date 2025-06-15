@@ -13,7 +13,7 @@ import morgan from "morgan"
 import { logger } from "./utils/logger"
 import configRoutes from "./routes/configRoutes"
 
-// Load environment variables
+// Load environment variables FIRST
 config()
 
 // Basic environment check
@@ -23,6 +23,7 @@ if (!process.env.NODE_ENV) {
 
 logger.startup("ACME Configuration Manager API starting...")
 logger.startup(`Environment: ${process.env.NODE_ENV}`)
+logger.startup("🔥 Using Node.js native watching (no nodemon needed!)")
 
 // Initialize Firebase
 import "./config/firebase"
