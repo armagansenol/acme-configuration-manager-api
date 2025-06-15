@@ -77,7 +77,7 @@ You can deploy to Render in two ways:
     *   **Name**: Give your service a name (e.g., `acme-config-api`).
     *   **Region**: Choose a region close to you.
     *   **Runtime**: Render will detect `Node`.
-    *   **Build Command**: `npm install && npm run build`
+    *   **Build Command**: `npm ci && npm run build`
     *   **Start Command**: `npm start`
     *   **Plan**: Choose the 'Free' plan to start.
 
