@@ -132,9 +132,11 @@ curl -H "x-api-key: your-api-key" \
   "value": true,
   "type": "boolean",
   "description": "Enable the new feature for users",
-  "countryOverrides": {
-    "US": true,
-    "EU": false
+  "overrides": {
+    "country": {
+      "US": "value1",
+      "FR": "value2"
+    }
   },
   "createdAt": "2024-01-01T00:00:00.000Z",
   "updatedAt": "2024-01-01T00:00:00.000Z"
