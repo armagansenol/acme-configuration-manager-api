@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: acme-config-api
+    runtime: node
+    region: oregon # e.g., oregon, frankfurt
+    plan: free # or standard
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm start"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FIREBASE_PROJECT_ID
+        fromSecret: FIREBASE_PROJECT_ID
+      - key: FIREBASE_PRIVATE_KEY_ID
+        fromSecret: FIREBASE_PRIVATE_KEY_ID
+      - key: FIREBASE_PRIVATE_KEY
+        fromSecret: FIREBASE_PRIVATE_KEY
+      - key: FIREBASE_CLIENT_EMAIL
+        fromSecret: FIREBASE_CLIENT_EMAIL
+      - key: FIREBASE_CLIENT_ID
+        fromSecret: FIREBASE_CLIENT_ID
+      - key: MOBILE_API_KEY
+        fromSecret: MOBILE_API_KEY
+      - key: ALLOWED_ORIGINS
+        fromSecret: ALLOWED_ORIGINS 

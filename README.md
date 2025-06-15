@@ -57,108 +57,98 @@ A robust, production-ready configuration management API for dynamic application 
    npm run dev
    ```
 
-## 🚀 Google Cloud Run Deployment
+## 🚀 Render.com Deployment
 
 ### Prerequisites
-- Google Cloud SDK installed
-- Docker installed
-- Google Cloud project with Billing enabled
-- Cloud Run API enabled
+- A Render.com account
+- Your code pushed to a GitHub/GitLab repository
 
-### Deployment Steps
+### Deployment Methods
 
-1. **Install Google Cloud SDK:**
-   ```bash
-   # macOS
-   brew install google-cloud-sdk
-   
-   # Or download from: https://cloud.google.com/sdk/docs/install
-   ```
+You can deploy to Render in two ways:
 
-2. **Login to Google Cloud:**
-   ```bash
-   gcloud auth login
-   gcloud config set project YOUR_PROJECT_ID
-   ```
+#### Method 1: Using the Render Dashboard (Recommended for Beginners)
 
-3. **Enable required APIs:**
-   ```bash
-   gcloud services enable cloudbuild.googleapis.com
-   gcloud services enable run.googleapis.com
-   ```
+1.  **Create a New Web Service**:
+    *   Go to the [Render Dashboard](https://dashboard.render.com/) and click "New" > "Web Service".
+    *   Connect your GitHub or GitLab account and select your repository.
 
-4. **Create Dockerfile** (add to project root):
-   ```dockerfile
-   FROM node:18-alpine
-   WORKDIR /app
-   COPY package*.json ./
-   RUN npm ci --only=production
-   COPY . .
-   RUN npm run build
-   EXPOSE 8080
-   CMD ["npm", "start"]
-   ```
+2.  **Configure the Service**:
+    *   **Name**: Give your service a name (e.g., `acme-config-api`).
+    *   **Region**: Choose a region close to you.
+    *   **Runtime**: Render will detect `Node`.
+    *   **Build Command**: `npm install && npm run build`
+    *   **Start Command**: `npm start`
+    *   **Plan**: Choose the 'Free' plan to start.
 
-5. **Deploy to Cloud Run:**
-   ```bash
-   gcloud run deploy acme-config-api \
-     --source . \
-     --platform managed \
-     --region us-central1 \
-     --allow-unauthenticated
-   ```
+3.  **Add Environment Variables**:
+    *   Under the "Environment" section, click "Add Environment Variable" or "Add Secret File" for each of the following. Use "Secret File" for long or sensitive values like `FIREBASE_PRIVATE_KEY`.
+    *   **Key**: `NODE_ENV`, **Value**: `production`
+    *   **Key**: `PORT`, **Value**: `10000` (Render's default)
+    *   **Key**: `FIREBASE_PROJECT_ID`, **Value**: `your-project-id`
+    *   **Key**: `FIREBASE_PRIVATE_KEY_ID`, **Value**: `your-private-key-id`
+    *   **Key**: `FIREBASE_PRIVATE_KEY`, **Value**: (your full private key)
+    *   **Key**: `FIREBASE_CLIENT_EMAIL`, **Value**: `your-client-email`
+    *   **Key**: `FIREBASE_CLIENT_ID`, **Value**: `your-client-id`
+    *   **Key**: `MOBILE_API_KEY`, **Value**: `your-secret-key`
+    *   **Key**: `ALLOWED_ORIGINS`, **Value**: `https://your-frontend.com`
 
-### Environment Variables in Google Cloud Run
+4.  **Deploy**:
+    *   Click "Create Web Service". Render will automatically build and deploy your application. Auto-deploys on pushes to your main branch will be enabled by default.
 
-Configure these environment variables in your Cloud Run service:
+#### Method 2: Infrastructure as Code with `render.yaml`
 
-```bash
-# Server Configuration
-NODE_ENV=production
-PORT=8080
+1.  **Add `render.yaml` to your repository root**:
+    Create a file named `render.yaml` with the content below. This file tells Render exactly how to build and run your service.
 
-# Firebase Configuration
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PRIVATE_KEY_ID=your-private-key-id
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----\n"
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
-FIREBASE_CLIENT_ID=your-client-id
-FIREBASE_AUTH_URI=https://accounts.google.com/o/oauth2/auth
-FIREBASE_TOKEN_URI=https://oauth2.googleapis.com/token
-FIREBASE_CLIENT_CERT_URL=https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-xxxxx%40your-project.iam.gserviceaccount.com
+    ```yaml
+    services:
+      - type: web
+        name: acme-config-api
+        env: node
+        region: oregon
+        plan: free
+        buildCommand: "npm install && npm run build"
+        startCommand: "npm start"
+        healthCheckPath: /health
+        envVars:
+          - key: NODE_ENV
+            value: production
+          - key: PORT
+            value: 10000
+          - key: FIREBASE_PROJECT_ID
+            fromSecret: FIREBASE_PROJECT_ID
+          - key: FIREBASE_PRIVATE_KEY_ID
+            fromSecret: FIREBASE_PRIVATE_KEY_ID
+          - key: FIREBASE_PRIVATE_KEY
+            fromSecret: FIREBASE_PRIVATE_KEY
+          - key: FIREBASE_CLIENT_EMAIL
+            fromSecret: FIREBASE_CLIENT_EMAIL
+          - key: FIREBASE_CLIENT_ID
+            fromSecret: FIREBASE_CLIENT_ID
+          - key: MOBILE_API_KEY
+            fromSecret: MOBILE_API_KEY
+          - key: ALLOWED_ORIGINS
+            fromSecret: ALLOWED_ORIGINS
+    ```
 
-# API Security
-MOBILE_API_KEY=your-secret-mobile-api-key-minimum-32-characters-long
-
-# CORS Configuration
-ALLOWED_ORIGINS=https://your-frontend-domain.com,https://your-app-hash-uc.a.run.app
-
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-```
-
-**Set environment variables using gcloud CLI:**
-```bash
-gcloud run services update acme-config-api \
-  --set-env-vars NODE_ENV=production,PORT=8080,FIREBASE_PROJECT_ID=your-project-id \
-  --set-env-vars MOBILE_API_KEY=your-secret-key \
-  --set-env-vars ALLOWED_ORIGINS=https://your-frontend-domain.com \
-  --region us-central1
-```
+2.  **Create a New "Blueprint" Service**:
+    *   Go to the [Render Dashboard](https://dashboard.render.com/) and click "New" > "Blueprint".
+    *   Select your repository. Render will automatically detect and use the `render.yaml` file.
+    *   You will be prompted to create the Environment Variables (as secrets) that are referenced in the `render.yaml` (`FIREBASE_PROJECT_ID`, etc.).
 
 ## 🔐 Authentication
 
 ### Firebase Authentication (Admin Operations)
 ```bash
 curl -H "Authorization: Bearer <firebase-token>" \
-     https://acme-config-api-hash-uc.a.run.app/api/parameters
+     https://acme-config-api.onrender.com/api/parameters
 ```
 
 ### API Key Authentication (Client Access)
 ```bash
 curl -H "x-api-key: your-api-key" \
-     https://acme-config-api-hash-uc.a.run.app/api/client-config?country=US
+     https://acme-config-api.onrender.com/api/client-config?country=US
 ```
 
 ## 📊 Parameter Structure
@@ -223,7 +213,7 @@ src/
 ✅ **Rate Limiting**: Protection against abuse  
 ✅ **CORS**: Configurable cross-origin policies  
 ✅ **TypeScript**: Full type safety  
-✅ **Cloud Ready**: Optimized for Google Cloud Run deployment  
+✅ **Cloud Ready**: Optimized for Render.com deployment  
 
 ## 📄 License
 
