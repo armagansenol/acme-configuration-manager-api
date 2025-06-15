@@ -29,7 +29,7 @@ import "./config/firebase"
 
 // Create Express app
 const app = express()
-const PORT = process.env.PORT || 3000
+const PORT = parseInt(process.env.PORT || "3000", 10)
 
 // Security middleware
 app.use(helmet())
@@ -200,20 +200,19 @@ app.use("*", (req, res) => {
   res.status(404).json({ error: "Not found", message: "The requested resource was not found." })
 })
 
-// Start server (only in non-serverless environments)
-if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
-  app.listen(PORT, () => {
-    logger.startup(`🚀 Server running on port ${PORT}`)
-    logger.startup("📡 API endpoints available:")
-    logger.startup("  GET  /health - Health check")
-    logger.startup("  GET  /api/parameters - Get all parameters (Firebase Auth)")
-    logger.startup("  POST /api/parameters - Create parameter (Firebase Auth)")
-    logger.startup("  PUT  /api/parameters/:id - Update parameter (Firebase Auth)")
-    logger.startup("  DELETE /api/parameters/:id - Delete parameter (Firebase Auth)")
-    logger.startup("  GET  /api/client-config - Get client config (API Key)")
-  })
-} else {
-  logger.startup("🚀 ACME Configuration Manager API ready for serverless deployment")
-}
+// Start server (for Cloud Run and local development)
+// Cloud Run requires binding to 0.0.0.0 on the PORT environment variable
+const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"
+
+app.listen(PORT, HOST, () => {
+  logger.startup(`🚀 Server running on ${HOST}:${PORT}`)
+  logger.startup("📡 API endpoints available:")
+  logger.startup("  GET  /health - Health check")
+  logger.startup("  GET  /api/parameters - Get all parameters (Firebase Auth)")
+  logger.startup("  POST /api/parameters - Create parameter (Firebase Auth)")
+  logger.startup("  PUT  /api/parameters/:id - Update parameter (Firebase Auth)")
+  logger.startup("  DELETE /api/parameters/:id - Delete parameter (Firebase Auth)")
+  logger.startup("  GET  /api/client-config - Get client config (API Key)")
+})
 
 export default app
