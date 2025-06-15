@@ -8,6 +8,59 @@ const isDevelopment = process.env.NODE_ENV === "development"
 const isProduction = process.env.NODE_ENV === "production"
 const isDebug = process.env.DEBUG === "true"
 
+// Sensitive data patterns to sanitize from logs
+const SENSITIVE_PATTERNS = [
+  /Bearer\s+[A-Za-z0-9\-_]+/gi, // Bearer tokens
+  /password["\s]*:["\s]*[^"]+/gi, // Password fields
+  /api[_-]?key["\s]*:["\s]*[^"]+/gi, // API keys
+  /authorization["\s]*:["\s]*[^"]+/gi, // Authorization headers
+  /private[_-]?key["\s]*:["\s]*[^"]+/gi, // Private keys
+  /secret["\s]*:["\s]*[^"]+/gi, // Secret fields
+  /token["\s]*:["\s]*[^"]+/gi, // Token fields
+]
+
+// Function to sanitize sensitive data from logs
+const sanitizeLogData = (data: any): any => {
+  if (typeof data === "string") {
+    let sanitized = data
+    SENSITIVE_PATTERNS.forEach((pattern) => {
+      sanitized = sanitized.replace(pattern, (match) => {
+        const colonIndex = match.indexOf(":")
+        if (colonIndex !== -1) {
+          return match.substring(0, colonIndex + 1) + ' "[REDACTED]"'
+        }
+        return match.substring(0, 6) + "[REDACTED]"
+      })
+    })
+    return sanitized
+  }
+
+  if (typeof data === "object" && data !== null) {
+    if (Array.isArray(data)) {
+      return data.map((item) => sanitizeLogData(item))
+    }
+
+    const sanitized: any = {}
+    for (const [key, value] of Object.entries(data)) {
+      const keyLower = key.toLowerCase()
+      if (
+        keyLower.includes("password") ||
+        keyLower.includes("token") ||
+        keyLower.includes("secret") ||
+        keyLower.includes("key") ||
+        keyLower.includes("auth")
+      ) {
+        sanitized[key] = "[REDACTED]"
+      } else {
+        sanitized[key] = sanitizeLogData(value)
+      }
+    }
+    return sanitized
+  }
+
+  return data
+}
+
 // Define log format
 const logFormat = winston.format.combine(
   winston.format.timestamp({
@@ -120,13 +173,65 @@ class Logger {
 
   // Method to log errors with context (useful for debugging)
   errorWithContext(message: string, error: any, context?: any): void {
+    const sanitizedContext = context ? sanitizeLogData(context) : undefined
+
     if (isProduction) {
-      // In production, log minimal information
-      this.winston.error(message, { context })
+      // In production, log minimal information without stack traces
+      const sanitizedError = {
+        message: error?.message || "Unknown error",
+        code: error?.code,
+        type: error?.constructor?.name || "Error",
+      }
+      this.winston.error(message, {
+        error: sanitizedError,
+        context: sanitizedContext,
+        timestamp: new Date().toISOString(),
+      })
     } else {
-      // In development, log full details
-      this.winston.error(message, { error: error.message || error, stack: error.stack, context })
+      // In development, log more details but still sanitize sensitive data
+      const detailedError = {
+        message: error?.message || error,
+        stack: error?.stack,
+        code: error?.code,
+        type: error?.constructor?.name,
+      }
+      this.winston.error(message, {
+        error: detailedError,
+        context: sanitizedContext,
+        timestamp: new Date().toISOString(),
+      })
     }
+  }
+
+  // Enhanced security logging for audit trails
+  audit(action: string, details: any, userId?: string): void {
+    const sanitizedDetails = sanitizeLogData(details)
+    this.logWithCategory("info", "AUDIT", "📋", action, {
+      details: sanitizedDetails,
+      userId: userId ? `user_${userId.substring(0, 8)}***` : "anonymous", // Partial user ID
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Security event logging
+  securityEvent(event: string, details: any, severity: "low" | "medium" | "high" | "critical" = "medium"): void {
+    const sanitizedDetails = sanitizeLogData(details)
+    const logLevel = severity === "critical" ? "error" : severity === "high" ? "warn" : "info"
+    this.logWithCategory(logLevel, "SECURITY", "🚨", event, {
+      severity,
+      details: sanitizedDetails,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  // Safe user logging (only logs partial user info)
+  userAction(action: string, userId: string, details?: any): void {
+    const sanitizedDetails = details ? sanitizeLogData(details) : undefined
+    this.logWithCategory("info", "USER", "👤", action, {
+      userId: `user_${userId.substring(0, 8)}***`, // Partial user ID for privacy
+      details: sanitizedDetails,
+      timestamp: new Date().toISOString(),
+    })
   }
 }
 

@@ -1,4 +1,4 @@
-import { Request } from "express"
+import { Request, Response } from "express"
 import { DecodedIdToken } from "firebase-admin/auth"
 
 /**
@@ -8,6 +8,12 @@ import { DecodedIdToken } from "firebase-admin/auth"
 export interface AuthenticatedRequest extends Request {
   user?: DecodedIdToken
 }
+
+/**
+ * Express Controller Type
+ * Standard controller function type for Express routes
+ */
+export type ExpressController = (req: Request, res: Response) => Promise<void>
 
 // Re-export Firebase types
 export * from "./firebase"

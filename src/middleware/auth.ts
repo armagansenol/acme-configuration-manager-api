@@ -9,57 +9,106 @@ export const verifyFirebaseToken = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  logger.auth(`Middleware called for ${req.method} ${req.path}`)
+  logger.auth(`Authentication check for ${req.method} ${req.path}`)
 
   const authHeader = req.headers.authorization
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    logger.auth("Authentication failed: No token provided or invalid format")
-    res.status(401).send("Unauthorized: No token provided.")
+    logger.securityEvent(
+      "Authentication Failed",
+      {
+        reason: "Missing or invalid authorization header",
+        endpoint: `${req.method} ${req.path}`,
+        ip: req.ip,
+      },
+      "low"
+    )
+    res.status(401).json({ error: "Unauthorized", message: "No token provided or invalid format" })
     return
   }
 
   const idToken = authHeader.split("Bearer ")[1]
   if (!idToken) {
-    logger.auth("Authentication failed: Invalid token format")
-    res.status(401).send("Unauthorized: Invalid token format.")
+    logger.securityEvent(
+      "Authentication Failed",
+      {
+        reason: "Invalid bearer token format",
+        endpoint: `${req.method} ${req.path}`,
+        ip: req.ip,
+      },
+      "low"
+    )
+    res.status(401).json({ error: "Unauthorized", message: "Invalid token format" })
     return
   }
 
-  logger.auth(`Token received, attempting verification`)
+  logger.auth("Verifying Firebase token")
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken)
-    logger.auth(`Token verified successfully for user ID: ${decodedToken.uid}`)
+    logger.userAction("Authentication Success", decodedToken.uid, {
+      endpoint: `${req.method} ${req.path}`,
+    })
     req.user = decodedToken
     next()
   } catch (error) {
-    logger.errorWithContext("Firebase token verification failed", error)
-    res.status(403).send("Unauthorized: Invalid token.")
+    logger.securityEvent(
+      "Firebase Token Verification Failed",
+      {
+        endpoint: `${req.method} ${req.path}`,
+        error: error instanceof Error ? error.message : "Unknown error",
+        ip: req.ip,
+      },
+      "medium"
+    )
+    res.status(403).json({ error: "Forbidden", message: "Invalid token" })
   }
 }
 
 // Mobile API Key Authentication Middleware
 export const verifyApiKey = (req: Request, res: Response, next: NextFunction): void => {
-  logger.auth(`API Key middleware called for ${req.method} ${req.path}`)
+  logger.auth(`API Key check for ${req.method} ${req.path}`)
 
   const apiKey = req.headers.authorization
 
   if (!apiKey) {
-    logger.auth("API key authentication failed: No API key provided")
-    res.status(401).json({ error: "Unauthorized: No API key provided" })
+    logger.securityEvent(
+      "API Key Authentication Failed",
+      {
+        reason: "No API key provided",
+        endpoint: `${req.method} ${req.path}`,
+        ip: req.ip,
+      },
+      "low"
+    )
+    res.status(401).json({ error: "Unauthorized", message: "No API key provided" })
     return
   }
 
   if (!apiKey.startsWith("Bearer ")) {
-    logger.auth("API key authentication failed: Invalid format")
-    res.status(401).json({ error: "Unauthorized: Invalid API key format" })
+    logger.securityEvent(
+      "API Key Authentication Failed",
+      {
+        reason: "Invalid API key format",
+        endpoint: `${req.method} ${req.path}`,
+        ip: req.ip,
+      },
+      "low"
+    )
+    res.status(401).json({ error: "Unauthorized", message: "Invalid API key format" })
     return
   }
 
   // Validate API key length to prevent timing attacks
   if (!process.env.MOBILE_API_KEY || process.env.MOBILE_API_KEY.length < 32) {
-    logger.error("MOBILE_API_KEY is not set or too short - server configuration error")
+    logger.securityEvent(
+      "Server Configuration Error",
+      {
+        reason: "MOBILE_API_KEY not configured properly",
+        endpoint: `${req.method} ${req.path}`,
+      },
+      "critical"
+    )
     res.status(500).json({ error: "Server configuration error" })
     return
   }
@@ -69,8 +118,16 @@ export const verifyApiKey = (req: Request, res: Response, next: NextFunction): v
   const expectedKey = process.env.MOBILE_API_KEY
 
   if (providedKey.length !== expectedKey.length) {
-    logger.auth("API key authentication failed: Invalid length")
-    res.status(401).json({ error: "Unauthorized: Invalid API key" })
+    logger.securityEvent(
+      "API Key Authentication Failed",
+      {
+        reason: "Invalid key length",
+        endpoint: `${req.method} ${req.path}`,
+        ip: req.ip,
+      },
+      "medium"
+    )
+    res.status(401).json({ error: "Unauthorized", message: "Invalid API key" })
     return
   }
 
@@ -83,11 +140,23 @@ export const verifyApiKey = (req: Request, res: Response, next: NextFunction): v
   }
 
   if (!isValid) {
-    logger.auth("API key authentication failed: Invalid key")
-    res.status(401).json({ error: "Unauthorized: Invalid API key" })
+    logger.securityEvent(
+      "API Key Authentication Failed",
+      {
+        reason: "Invalid API key",
+        endpoint: `${req.method} ${req.path}`,
+        ip: req.ip,
+        keyPrefix: providedKey.substring(0, 4) + "***", // Only log first 4 chars
+      },
+      "medium"
+    )
+    res.status(401).json({ error: "Unauthorized", message: "Invalid API key" })
     return
   }
 
-  logger.auth("API key validated successfully")
+  logger.audit("API Key Authentication Success", {
+    endpoint: `${req.method} ${req.path}`,
+    keyPrefix: providedKey.substring(0, 4) + "***",
+  })
   next()
 }
