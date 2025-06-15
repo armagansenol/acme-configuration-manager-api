@@ -13,6 +13,8 @@ const requiredEnvVars = [
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     logger.error(`Missing required Firebase environment variable: ${envVar}`)
+    logger.error(`Please create a .env file and set ${envVar}`)
+    logger.error(`Copy env.example to .env and fill in your Firebase configuration`)
     process.exit(1)
   }
 }
