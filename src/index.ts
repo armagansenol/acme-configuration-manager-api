@@ -63,8 +63,8 @@ if (isDevelopment) {
   // Development: More detailed logging
   app.use(
     morgan("dev", {
-      stream: { write: (message) => logger.info(message.trim()) },
-      skip: (req) => {
+      stream: { write: (message: string) => logger.info(message.trim()) },
+      skip: (req: express.Request) => {
         // Skip logging for health checks and sensitive endpoints
         return req.url === "/health"
       },
@@ -72,7 +72,7 @@ if (isDevelopment) {
   )
 } else {
   // Production: Security-conscious logging without sensitive headers
-  morgan.token("sanitized-headers", (req) => {
+  morgan.token("sanitized-headers", (req: express.Request) => {
     const headers = { ...req.headers }
     // Remove sensitive headers from logs
     delete headers.authorization
@@ -84,8 +84,8 @@ if (isDevelopment) {
 
   app.use(
     morgan(":method :url :status :res[content-length] - :response-time ms", {
-      stream: { write: (message) => logger.info(message.trim()) },
-      skip: (req) => {
+      stream: { write: (message: string) => logger.info(message.trim()) },
+      skip: (req: express.Request) => {
         // Skip logging for health checks
         return req.url === "/health"
       },
