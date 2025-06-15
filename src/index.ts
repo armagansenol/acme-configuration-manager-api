@@ -200,16 +200,20 @@ app.use("*", (req, res) => {
   res.status(404).json({ error: "Not found", message: "The requested resource was not found." })
 })
 
-// Start server
-app.listen(PORT, () => {
-  logger.startup(`🚀 Server running on port ${PORT}`)
-  logger.startup("📡 API endpoints available:")
-  logger.startup("  GET  /health - Health check")
-  logger.startup("  GET  /api/parameters - Get all parameters (Firebase Auth)")
-  logger.startup("  POST /api/parameters - Create parameter (Firebase Auth)")
-  logger.startup("  PUT  /api/parameters/:id - Update parameter (Firebase Auth)")
-  logger.startup("  DELETE /api/parameters/:id - Delete parameter (Firebase Auth)")
-  logger.startup("  GET  /api/client-config - Get client config (API Key)")
-})
+// Start server (only in non-serverless environments)
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    logger.startup(`🚀 Server running on port ${PORT}`)
+    logger.startup("📡 API endpoints available:")
+    logger.startup("  GET  /health - Health check")
+    logger.startup("  GET  /api/parameters - Get all parameters (Firebase Auth)")
+    logger.startup("  POST /api/parameters - Create parameter (Firebase Auth)")
+    logger.startup("  PUT  /api/parameters/:id - Update parameter (Firebase Auth)")
+    logger.startup("  DELETE /api/parameters/:id - Delete parameter (Firebase Auth)")
+    logger.startup("  GET  /api/client-config - Get client config (API Key)")
+  })
+} else {
+  logger.startup("🚀 ACME Configuration Manager API ready for serverless deployment")
+}
 
 export default app

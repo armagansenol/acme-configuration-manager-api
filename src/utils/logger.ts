@@ -84,8 +84,8 @@ if (isDevelopment || isDebug) {
   )
 }
 
-if (isProduction) {
-  // File transports for production
+if (isProduction && !process.env.VERCEL) {
+  // File transports for production (not in serverless environments)
   transports.push(
     new winston.transports.File({
       filename: "logs/error.log",
@@ -94,6 +94,13 @@ if (isProduction) {
     }),
     new winston.transports.File({
       filename: "logs/combined.log",
+      format: logFormat,
+    })
+  )
+} else if (isProduction && process.env.VERCEL) {
+  // In Vercel, use console logging for production
+  transports.push(
+    new winston.transports.Console({
       format: logFormat,
     })
   )
