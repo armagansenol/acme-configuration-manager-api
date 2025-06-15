@@ -1,5 +1,5 @@
-# Use the official Node.js runtime as a parent image
-FROM node:18-alpine
+# Multi-stage build for optimal image size
+FROM node:18-alpine AS builder
 
 # Set the working directory
 WORKDIR /app
@@ -7,14 +7,29 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install production dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (including devDependencies for building)
+RUN npm ci && npm cache clean --force
 
 # Copy the rest of the application code
 COPY . .
 
 # Build the TypeScript application
 RUN npm run build
+
+# Production stage
+FROM node:18-alpine AS production
+
+# Set the working directory
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy built application from builder stage
+COPY --from=builder /app/dist ./dist
 
 # Create a non-root user to run the application
 RUN addgroup -g 1001 -S nodejs
