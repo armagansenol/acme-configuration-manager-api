@@ -11,7 +11,9 @@
         "vercel-build": "npm run build",
         "lint": "eslint src/**/*.ts",
         "lint:fix": "eslint src/**/*.ts --fix",
-        "clean": "npx rimraf dist"
+        "clean": "npx rimraf dist",
+        "test:conflict": "node test-conflict-detection.js",
+        "test:all": "node scripts/test-all-features.js"
     },
     "keywords": [
         "configuration-management",
@@ -34,6 +36,7 @@
         "helmet": "^7.1.0",
         "joi": "^17.12.0",
         "morgan": "^1.10.0",
+        "redis": "^4.7.1",
         "winston": "^3.11.0"
     },
     "devDependencies": {
