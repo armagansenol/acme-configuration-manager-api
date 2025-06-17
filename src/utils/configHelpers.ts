@@ -2,7 +2,14 @@ import { QueryDocumentSnapshot, Transaction } from "firebase-admin/firestore"
 import { admin, db } from "../config/firebase"
 import { FIRESTORE_COLLECTIONS, ParameterNotFoundError, DatabaseError, ValidationError } from "../types"
 import { logger } from "./logger"
-import { ParameterData, resolveParameterValue, prepareParameterForStorage, incrementVersion } from "./parameterUtils"
+import {
+  ParameterData,
+  resolveParameterValue,
+  prepareParameterForStorage,
+  incrementVersion,
+  ParameterBody,
+  ParameterValue,
+} from "./parameterUtils"
 
 /**
  * Helper functions for configuration operations
@@ -12,7 +19,7 @@ import { ParameterData, resolveParameterValue, prepareParameterForStorage, incre
 /**
  * Validate if a document represents a valid active parameter
  */
-export function isValidParameterDocument(data: any, docId: string): boolean {
+export function isValidParameterDocument(data: Partial<ParameterData>, docId: string): data is ParameterData {
   if (!data || typeof data.key !== "string" || data.isActive === false) {
     logger.warn(`Skipping invalid or inactive parameter document: ${docId}`)
     return false
@@ -42,11 +49,14 @@ export function transformDocumentToParameterData(doc: QueryDocumentSnapshot): Pa
 /**
  * Build configuration object from parameter documents
  */
-export function buildConfigurationObject(docs: QueryDocumentSnapshot[], country?: string): Record<string, any> {
-  const config: Record<string, any> = {}
+export function buildConfigurationObject(
+  docs: QueryDocumentSnapshot[],
+  country?: string
+): Record<string, ParameterValue> {
+  const config: Record<string, ParameterValue> = {}
 
   docs.forEach((doc: QueryDocumentSnapshot) => {
-    const data = doc.data()
+    const data = doc.data() as Partial<ParameterData>
 
     if (!isValidParameterDocument(data, doc.id)) {
       return
@@ -64,10 +74,10 @@ export function buildConfigurationObject(docs: QueryDocumentSnapshot[], country?
 /**
  * Detect conflicting fields between update data and existing data
  */
-export function detectConflictingFields(updateData: any, existingData: any): string[] {
+export function detectConflictingFields(updateData: Partial<ParameterBody>, existingData: ParameterData): string[] {
   const conflicts: string[] = []
 
-  const fieldsToCheck = ["key", "value", "description", "isActive"]
+  const fieldsToCheck: (keyof ParameterBody)[] = ["key", "value", "description", "isActive"]
   for (const field of fieldsToCheck) {
     if (updateData[field] !== undefined && updateData[field] !== existingData[field]) {
       conflicts.push(field)
@@ -95,16 +105,21 @@ export function detectConflictingFields(updateData: any, existingData: any): str
 /**
  * Create parameter object for database storage
  */
-export function createParameterObject(body: any, uid: string, isUpdate = false, currentVersion = 0): any {
-  const { key, value, description, overrides, isActive, lastKnownVersion, forceUpdate, ...rest } = body
+export function createParameterObject(
+  body: ParameterBody,
+  uid: string,
+  isUpdate = false,
+  currentVersion = 0
+): Omit<ParameterData, "id"> {
+  const { key, value, description, overrides, isActive } = body
 
   // Prepare the basic parameter data
   const parameterData: ParameterData = {
     key,
     value,
-    description,
+    description: description || "",
     overrides: overrides || {},
-    isActive,
+    isActive: isActive !== undefined ? isActive : true,
     version: isUpdate ? incrementVersion(currentVersion) : 0,
   }
 
@@ -116,7 +131,6 @@ export function createParameterObject(body: any, uid: string, isUpdate = false, 
     ...preparedData,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     lastUpdatedBy: uid,
-    isActive: preparedData.isActive !== undefined ? preparedData.isActive : true,
   }
 
   if (!isUpdate) {
@@ -131,7 +145,7 @@ export function createParameterObject(body: any, uid: string, isUpdate = false, 
  */
 export async function fetchParameterDocument(id: string): Promise<{
   doc: QueryDocumentSnapshot
-  data: any
+  data: ParameterData
 }> {
   if (!id) {
     throw new ValidationError("Parameter ID is required", "id")
@@ -153,7 +167,7 @@ export async function fetchParameterDocument(id: string): Promise<{
       throw new DatabaseError(`Parameter ${id} has no data`, "fetch")
     }
 
-    return { doc: doc as QueryDocumentSnapshot, data }
+    return { doc: doc as QueryDocumentSnapshot, data: data as ParameterData }
   } catch (error) {
     if (error instanceof ParameterNotFoundError) {
       throw error
@@ -219,7 +233,7 @@ export function getParametersCollectionRef(
  */
 export function validateParameterOperationPermissions(
   operation: "create" | "read" | "update" | "delete",
-  parameterData?: any,
+  parameterData?: Partial<ParameterData>,
   userContext?: { uid: string; email?: string }
 ): void {
   // Add any business logic for parameter operation permissions
@@ -243,8 +257,11 @@ export function validateParameterOperationPermissions(
 /**
  * Sanitize parameter data for public API responses
  */
-export function sanitizeParameterForResponse(parameter: any, includeMetadata: boolean = true): any {
-  const sanitized = {
+export function sanitizeParameterForResponse(
+  parameter: ParameterData,
+  includeMetadata: boolean = true
+): Partial<ParameterData> {
+  const sanitized: Partial<ParameterData> = {
     id: parameter.id,
     key: parameter.key,
     value: parameter.value,
@@ -254,12 +271,13 @@ export function sanitizeParameterForResponse(parameter: any, includeMetadata: bo
   }
 
   if (includeMetadata) {
+    const { version, createdAt, updatedAt, lastUpdatedBy } = parameter
     return {
       ...sanitized,
-      version: parameter.version,
-      createdAt: parameter.createdAt,
-      updatedAt: parameter.updatedAt,
-      lastUpdatedBy: parameter.lastUpdatedBy,
+      version,
+      createdAt,
+      updatedAt,
+      lastUpdatedBy,
     }
   }
 

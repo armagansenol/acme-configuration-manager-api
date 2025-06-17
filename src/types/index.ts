@@ -21,8 +21,5 @@ export const FIRESTORE_COLLECTIONS = {
   PARAMETERS: "parameters",
 } as const
 
-// Re-export Firebase types
-export * from "./firebase"
-
 // Re-export error classes
 export * from "./errors"
