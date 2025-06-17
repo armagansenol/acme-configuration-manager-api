@@ -57,11 +57,34 @@ const PORT = parseInt(process.env.PORT || "3000", 10)
 app.use(helmet())
 
 // CORS configuration
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:5173"]
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()) || [
+  "http://localhost:5173",
+]
 logger.startup(`CORS allowed origins: ${JSON.stringify(allowedOrigins)}`)
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    // Log the incoming origin for debugging
+    logger.info(`CORS check for origin: ${origin}`)
+
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true)
+
+    // Check if the origin (with or without trailing slash) is allowed
+    const isAllowed = allowedOrigins.some((allowedOrigin) => {
+      const normalizedOrigin = origin.replace(/\/$/, "") // Remove trailing slash
+      const normalizedAllowed = allowedOrigin.replace(/\/$/, "") // Remove trailing slash
+      return normalizedOrigin === normalizedAllowed
+    })
+
+    if (isAllowed) {
+      logger.info(`CORS allowed for origin: ${origin}`)
+      callback(null, true)
+    } else {
+      logger.warn(`CORS blocked for origin: ${origin}. Allowed origins: ${JSON.stringify(allowedOrigins)}`)
+      callback(new Error("Not allowed by CORS"))
+    }
+  },
   credentials: true,
 }
 app.use(cors(corsOptions))
