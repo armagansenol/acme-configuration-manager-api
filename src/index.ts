@@ -53,6 +53,10 @@ const initializeServices = async () => {
 const app = express()
 const PORT = parseInt(process.env.PORT || "3000", 10)
 
+// Trust proxy setting - required for Render and other proxy environments
+// This allows express-rate-limit to correctly identify users behind proxies
+app.set("trust proxy", true)
+
 // Security middleware
 app.use(helmet())
 
