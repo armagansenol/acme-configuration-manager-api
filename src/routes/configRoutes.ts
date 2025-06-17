@@ -6,6 +6,9 @@ import {
   addParameter,
   updateParameter,
   deleteParameter,
+  setCountryOverrideController,
+  deleteCountryOverrideController,
+  getCountryOverridesController,
 } from "../controllers/configController"
 import {
   verifyFirebaseToken,
@@ -16,7 +19,10 @@ import {
   parameterSchema,
   updateParameterSchema,
   deleteParameterSchema,
+  countryOverrideSchema,
+  deleteCountryOverrideSchema,
   idParamSchema,
+  countryParamSchema,
   querySchema,
   generalApiLimiter,
   adminApiLimiter,
@@ -59,6 +65,35 @@ router.delete(
   validateParams(idParamSchema),
   validateBody(deleteParameterSchema),
   deleteParameter
+)
+
+// Get country overrides for a parameter - Admin only
+router.get(
+  "/parameters/:id/overrides/country",
+  adminApiLimiter,
+  verifyFirebaseToken,
+  validateParams(idParamSchema),
+  getCountryOverridesController
+)
+
+// Set a country override for a parameter - Admin only
+router.put(
+  "/parameters/:id/overrides/country/:countryCode",
+  adminApiLimiter,
+  verifyFirebaseToken,
+  validateParams(countryParamSchema),
+  validateBody(countryOverrideSchema),
+  setCountryOverrideController
+)
+
+// Delete a country override for a parameter - Admin only
+router.delete(
+  "/parameters/:id/overrides/country/:countryCode",
+  adminApiLimiter, // Changed from sensitiveOperationLimiter for better dev experience
+  verifyFirebaseToken,
+  validateParams(countryParamSchema),
+  validateBody(deleteCountryOverrideSchema),
+  deleteCountryOverrideController
 )
 
 // Get client configuration with resolved parameter values - Mobile API
