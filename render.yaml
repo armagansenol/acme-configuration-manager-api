@@ -1,4 +1,13 @@
 services:
+  # Redis Service - Option 1: Render Redis (Recommended)
+  - type: redis
+    name: acme-config-redis
+    region: oregon
+    plan: starter # $7/month - or "free" if available
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: [] # Allow all IPs
+    
+  # Web Service  
   - type: web
     name: acme-config-api
     runtime: node
@@ -25,4 +34,24 @@ services:
       - key: MOBILE_API_KEY
         value: your-secret-mobile-api-key-minimum-32-characters-long
       - key: ALLOWED_ORIGINS
-        value: https://your-frontend-domain.com 
+        value: https://your-frontend-domain.com
+      # Redis Configuration - Option 1: Render Redis
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: acme-config-redis
+          property: connectionString
+      # 
+      # Alternative Redis Options (comment out the above and use one of these):
+      # 
+      # Option 2: Redis Cloud (Free tier available)
+      # - key: REDIS_URL
+      #   value: redis://default:password@redis-12345.c1.us-east1-2.gce.cloud.redislabs.com:12345
+      #
+      # Option 3: Upstash Redis (Free tier: 10k commands/day)
+      # - key: REDIS_URL  
+      #   value: redis://default:password@region-redis.upstash.io:6379
+      #
+      # Option 4: Railway Redis (if you migrate to Railway)
+      # - key: REDIS_URL
+      #   value: redis://default:password@containers-us-west-1.railway.app:6379 
