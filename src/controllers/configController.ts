@@ -1,36 +1,32 @@
 import { QueryDocumentSnapshot, Transaction } from "firebase-admin/firestore"
 import { admin, db } from "../config/firebase"
+import { CacheKeys, cacheService } from "../services/cacheService"
 import {
   AuthenticatedRequest,
+  ConflictError,
+  DatabaseError,
   ExpressController,
   FIRESTORE_COLLECTIONS,
-  ConflictError,
   ParameterNotFoundError,
-  DatabaseError,
   ValidationError,
 } from "../types"
-import { logger } from "../utils/logger"
-import { resolveUserIdToEmail } from "../utils/userUtils"
-import {
-  resolveParameterValue,
-  prepareParameterForStorage,
-  ParameterData,
-  incrementVersion,
-} from "../utils/parameterUtils"
+import { isCustomError } from "../types/errors"
 import {
   buildConfigurationObject,
-  detectConflictingFields,
+  checkParameterKeyExists,
   createParameterObject,
-  fetchParameterDocument,
+  detectConflictingFields,
   executeTransactionWithTimeout,
+  fetchParameterDocument,
   getParametersCollectionRef,
-  validateParameterOperationPermissions,
-  sanitizeParameterForResponse,
+  mergeOverrides,
+  removeCountryOverride,
+  setCountryOverride,
+  validateCountryOverrideOperation,
 } from "../utils/configHelpers"
-import { cacheService, CacheKeys } from "../services/cacheService"
-import { isCustomError } from "../types/errors"
-
-// Moved to utils/configHelpers.ts
+import { logger } from "../utils/logger"
+import { ParameterData, incrementVersion } from "../utils/parameterUtils"
+import { resolveUserIdToEmail } from "../utils/userUtils"
 
 // Mobile client configuration endpoint - gets parameters and resolves overrides with caching
 export const getClientConfig: ExpressController = async (req, res) => {
@@ -131,7 +127,28 @@ export const getParameter: ExpressController = async (req, res) => {
 export const addParameter: ExpressController = async (req, res) => {
   try {
     const { uid } = (req as AuthenticatedRequest).user!
+    const { key } = req.body
+
     logger.database("Adding new parameter")
+
+    // Check if parameter key already exists
+    const keyCheck = await checkParameterKeyExists(key)
+    if (keyCheck.exists) {
+      logger.userAction("Duplicate Parameter Key Attempt", uid, {
+        attemptedKey: key,
+        existingParameterId: keyCheck.existingParameter?.id,
+      })
+
+      res.status(409).json({
+        error: "Conflict",
+        message: `Parameter with key '${key}' already exists`,
+        details: {
+          existingParameterId: keyCheck.existingParameter?.id,
+          conflictingKey: key,
+        },
+      })
+      return
+    }
 
     const newParameter = createParameterObject(req.body, uid)
     const docRef = await db.collection(FIRESTORE_COLLECTIONS.PARAMETERS).add(newParameter)
@@ -168,6 +185,29 @@ export const updateParameter: ExpressController = async (req, res) => {
     const { lastKnownVersion, forceUpdate = false, ...updateData } = req.body
 
     logger.database(`Updating parameter ${id} with version check`)
+
+    // Check if the new key already exists (excluding current parameter)
+    if (updateData.key) {
+      const keyCheck = await checkParameterKeyExists(updateData.key, id)
+      if (keyCheck.exists) {
+        logger.userAction("Duplicate Parameter Key Update Attempt", uid, {
+          parameterId: id,
+          attemptedKey: updateData.key,
+          existingParameterId: keyCheck.existingParameter?.id,
+        })
+
+        res.status(409).json({
+          error: "Conflict",
+          message: `Parameter with key '${updateData.key}' already exists`,
+          details: {
+            existingParameterId: keyCheck.existingParameter?.id,
+            conflictingKey: updateData.key,
+          },
+        })
+        return
+      }
+    }
+
     const parameterRef = db.collection(FIRESTORE_COLLECTIONS.PARAMETERS).doc(id)
 
     await db.runTransaction(async (transaction: Transaction) => {
@@ -209,11 +249,15 @@ export const updateParameter: ExpressController = async (req, res) => {
 
       logger.database(`Version check passed: ${lastKnownVersion} -> ${currentVersion + 1}`)
 
-      // Merge existing overrides with new data to preserve overrides
+      // Intelligently merge overrides instead of replacing them
+      const mergedOverrides =
+        updateData.overrides !== undefined
+          ? mergeOverrides(existingData.overrides || {}, updateData.overrides, "merge")
+          : existingData.overrides || {}
+
       const mergedRequestBody = {
         ...updateData,
-        // Preserve existing overrides if not provided in the update request
-        overrides: updateData.overrides !== undefined ? updateData.overrides : existingData.overrides || {},
+        overrides: mergedOverrides,
       }
 
       // Update the parameter with new timestamp and incremented version
@@ -308,6 +352,292 @@ export const deleteParameter: ExpressController = async (req, res) => {
 
     res.status(500).json({
       error: "Internal server error while deleting parameter",
+      timestamp: new Date().toISOString(),
+      path: req.path,
+    })
+  }
+}
+
+export const setCountryOverrideController: ExpressController = async (req, res) => {
+  try {
+    const { id, countryCode } = req.params
+    const { value, lastKnownVersion, forceUpdate = false } = req.body
+    const { uid } = (req as AuthenticatedRequest).user!
+
+    if (!id || !countryCode) {
+      res.status(400).json({
+        error: "Bad request",
+        message: "Parameter ID and country code are required",
+      })
+      return
+    }
+
+    // Validate country override operation
+    validateCountryOverrideOperation(countryCode, value, "set")
+
+    logger.database(`Setting country override for parameter ${id}, country ${countryCode}`)
+    const parameterRef = db.collection(FIRESTORE_COLLECTIONS.PARAMETERS).doc(id)
+
+    await db.runTransaction(async (transaction: Transaction) => {
+      const doc = await transaction.get(parameterRef)
+
+      if (!doc.exists) {
+        throw new Error("Parameter not found.")
+      }
+
+      const existingData = doc.data()!
+      const currentVersion = existingData.version || 0
+
+      // Version-based conflict detection
+      if (lastKnownVersion !== undefined && lastKnownVersion !== currentVersion && !forceUpdate) {
+        const lastModifiedByEmail = await resolveUserIdToEmail(existingData.lastUpdatedBy || "")
+
+        throw new ConflictError("Configuration has been modified by another user", {
+          currentVersion,
+          providedVersion: lastKnownVersion,
+          lastModifiedBy: lastModifiedByEmail,
+          lastModifiedAt: existingData.updatedAt,
+          conflictingFields: [`overrides.country.${countryCode.toUpperCase()}`],
+        })
+      }
+
+      // Set the specific country override
+      const updatedOverrides = setCountryOverride(existingData.overrides || {}, countryCode, value)
+
+      const updatedParameter = {
+        ...existingData,
+        overrides: updatedOverrides,
+        version: incrementVersion(currentVersion),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedBy: uid,
+      }
+
+      transaction.update(parameterRef, updatedParameter)
+    })
+
+    logger.audit(
+      "Country Override Set",
+      {
+        parameterId: id,
+        countryCode: countryCode.toUpperCase(),
+        value,
+        versionIncrement: `${lastKnownVersion || "unknown"} -> ${(lastKnownVersion || 0) + 1}`,
+        forceUpdate,
+      },
+      uid
+    )
+
+    res.status(200).json({
+      message: `Country override for ${countryCode.toUpperCase()} set successfully.`,
+      newVersion: (lastKnownVersion || 0) + 1,
+    })
+  } catch (error) {
+    // Handle conflict errors specifically
+    if (error instanceof ConflictError) {
+      res.status(409).json({
+        error: "Conflict",
+        message: error.message,
+        conflictDetails: error.details,
+        resolutionOptions: {
+          forceUpdate: "Override changes and update anyway (set forceUpdate: true)",
+          fetchLatest: "Get latest version and retry with correct lastKnownVersion",
+          cancel: "Cancel the update operation",
+        },
+      })
+      return
+    }
+
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        error: "Validation error",
+        message: error.message,
+        field: error.field,
+      })
+      return
+    }
+
+    logger.errorWithContext("Error setting country override", error, {
+      id: req.params.id || "unknown",
+      countryCode: req.params.countryCode || "unknown",
+    })
+
+    if (error instanceof Error && error.message === "Parameter not found.") {
+      res.status(404).json({ error: "Not found", message: error.message })
+      return
+    }
+
+    res.status(500).json({
+      error: "Internal server error",
+      message: "Error setting country override.",
+    })
+  }
+}
+
+export const deleteCountryOverrideController: ExpressController = async (req, res) => {
+  try {
+    const { id, countryCode } = req.params
+    const { lastKnownVersion, forceUpdate = false } = req.body
+    const { uid } = (req as AuthenticatedRequest).user!
+
+    if (!id || !countryCode) {
+      res.status(400).json({
+        error: "Bad request",
+        message: "Parameter ID and country code are required",
+      })
+      return
+    }
+
+    // Validate country override operation
+    validateCountryOverrideOperation(countryCode, undefined, "delete")
+
+    logger.database(`Deleting country override for parameter ${id}, country ${countryCode}`)
+    const parameterRef = db.collection(FIRESTORE_COLLECTIONS.PARAMETERS).doc(id)
+
+    let finalVersion = 0
+
+    await db.runTransaction(async (transaction: Transaction) => {
+      const doc = await transaction.get(parameterRef)
+
+      if (!doc.exists) {
+        throw new Error("Parameter not found.")
+      }
+
+      const existingData = doc.data()!
+      const currentVersion = existingData.version || 0
+      finalVersion = incrementVersion(currentVersion)
+
+      // Check if country override exists
+      if (!existingData.overrides?.country?.[countryCode.toUpperCase()]) {
+        throw new ValidationError(`Country override for ${countryCode.toUpperCase()} does not exist`, "countryCode")
+      }
+
+      // Version-based conflict detection
+      if (lastKnownVersion !== undefined && lastKnownVersion !== currentVersion && !forceUpdate) {
+        const lastModifiedByEmail = await resolveUserIdToEmail(existingData.lastUpdatedBy || "")
+
+        throw new ConflictError("Configuration has been modified by another user", {
+          currentVersion,
+          providedVersion: lastKnownVersion,
+          lastModifiedBy: lastModifiedByEmail,
+          lastModifiedAt: existingData.updatedAt,
+          conflictingFields: [`overrides.country.${countryCode.toUpperCase()}`],
+        })
+      }
+
+      // Remove the specific country override
+      const updatedOverrides = removeCountryOverride(existingData.overrides || {}, countryCode)
+
+      const updatedParameter = {
+        ...existingData,
+        overrides: updatedOverrides,
+        version: finalVersion,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedBy: uid,
+      }
+
+      transaction.update(parameterRef, updatedParameter)
+    })
+
+    logger.audit(
+      "Country Override Deleted",
+      {
+        parameterId: id,
+        countryCode: countryCode.toUpperCase(),
+        versionIncrement: `${lastKnownVersion || "unknown"} -> ${(lastKnownVersion || 0) + 1}`,
+        forceUpdate,
+      },
+      uid
+    )
+
+    res.status(200).json({
+      message: `Country override for ${countryCode.toUpperCase()} deleted successfully.`,
+      newVersion: finalVersion,
+    })
+  } catch (error) {
+    // Handle conflict errors specifically
+    if (error instanceof ConflictError) {
+      res.status(409).json({
+        error: "Conflict",
+        message: error.message,
+        conflictDetails: error.details,
+        resolutionOptions: {
+          forceUpdate: "Override changes and update anyway (set forceUpdate: true)",
+          fetchLatest: "Get latest version and retry with correct lastKnownVersion",
+          cancel: "Cancel the update operation",
+        },
+      })
+      return
+    }
+
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        error: "Validation error",
+        message: error.message,
+        field: error.field,
+      })
+      return
+    }
+
+    logger.errorWithContext("Error deleting country override", error, {
+      id: req.params.id || "unknown",
+      countryCode: req.params.countryCode || "unknown",
+    })
+
+    if (error instanceof Error && error.message === "Parameter not found.") {
+      res.status(404).json({ error: "Not found", message: error.message })
+      return
+    }
+
+    res.status(500).json({
+      error: "Internal server error",
+      message: "Error deleting country override.",
+    })
+  }
+}
+
+export const getCountryOverridesController: ExpressController = async (req, res) => {
+  try {
+    const { id } = req.params
+
+    if (!id) {
+      res.status(400).json({
+        error: "Bad request",
+        message: "Parameter ID is required",
+      })
+      return
+    }
+
+    logger.database(`Getting country overrides for parameter ${id}`)
+
+    const { doc, data } = await fetchParameterDocument(id)
+
+    const countryOverrides = data.overrides?.country || {}
+
+    logger.api(`Retrieved ${Object.keys(countryOverrides).length} country overrides for parameter ${id}`)
+
+    res.status(200).json({
+      parameterId: id,
+      parameterKey: data.key,
+      countryOverrides,
+      availableCountries: Object.keys(countryOverrides),
+      totalOverrides: Object.keys(countryOverrides).length,
+    })
+  } catch (error: unknown) {
+    logger.errorWithContext("Error fetching country overrides", error, {
+      id: req.params.id || "unknown",
+    })
+
+    if (error instanceof ParameterNotFoundError || error instanceof ValidationError) {
+      res.status(error.statusCode).json({
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        path: req.path,
+      })
+      return
+    }
+
+    res.status(500).json({
+      error: "Internal server error while fetching country overrides",
       timestamp: new Date().toISOString(),
       path: req.path,
     })
