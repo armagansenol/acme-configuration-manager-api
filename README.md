@@ -2,170 +2,170 @@
 
 A robust, enterprise-grade configuration management API for dynamic application parameters with advanced caching, security, and monitoring features.
 
+## Table of Contents
+- [✨ Key Features](#-key-features)
+- [📡 API Documentation](#-api-documentation)
+- [🛠️ Local Development](#️-local-development)
+  - [Prerequisites](#prerequisites)
+  - [Quick Setup](#quick-setup)
+  - [Environment Variables](#environment-variables)
+  - [Available Scripts](#available-scripts)
+- [🔐 Authentication & Security](#-authentication--security)
+- [🚀 API Endpoints](#-api-endpoints)
+- [📊 Parameter Structure](#-parameter-structure)
+- [🚨 Error Handling & Monitoring](#-error-handling--monitoring)
+- [🔄 Advanced Features](#-advanced-features)
+- [🚀 Production Deployment](#-production-deployment)
+
+
 ## ✨ Key Features
 
 ### 🚀 **Performance & Caching**
-- **Redis Caching** - High-performance in-memory caching with TTL and fallback
-- **Optimized Queries** - Database indexes and query optimization
-- **Connection Pooling** - Efficient database resource management
-- **Cache Patterns** - Get-or-set, invalidation patterns, and statistics
+- **Redis Caching** - High-performance in-memory caching with TTL and fallback.
+- **Optimized Queries** - Database indexes and query optimization for fast data retrieval.
+- **Connection Pooling** - Efficient management of database resources.
+- **Cache Patterns** - Implements cache-aside, write-through, and proactive invalidation.
 
 ### 🔒 **Enterprise Security**
-- **Multi-layer Authentication** - Firebase Auth for admins, API keys for clients
-- **Deep Input Validation** - SQL injection, NoSQL injection, and script injection protection
-- **Rate Limiting** - Multiple tiers (general, admin, client, sensitive operations)
-- **Security Event Logging** - Comprehensive audit trails and threat detection
-- **Prototype Pollution Protection** - Advanced object validation
+- **Multi-layer Authentication** - Firebase Auth for admin users and API keys for client applications.
+- **Deep Input Validation** - Protection against SQL/NoSQL injection, XSS, and other threats.
+- **Rate Limiting** - Multiple tiers for different user roles and operations.
+- **Security Event Logging** - Comprehensive audit trails for threat detection.
+- **Prototype Pollution Protection** - Advanced object validation to prevent security vulnerabilities.
 
 ### 📊 **Monitoring & Observability**
-- **Health Checks** - Comprehensive system health monitoring
-- **Performance Metrics** - Request timing, memory usage, and system stats
-- **Request/Response Logging** - Detailed logging with correlation IDs
-- **Error Tracking** - Custom error classes with proper HTTP status codes
-- **Slow Query Detection** - Performance monitoring and alerting
+- **Health Checks** - Comprehensive health monitoring for all system components.
+- **Performance Metrics** - Real-time tracking of request timing, memory usage, and system stats.
+- **Structured Logging** - Detailed request/response logging with correlation IDs for easy debugging.
+- **Error Tracking** - Custom error classes with appropriate HTTP status codes.
 
 ### 🔄 **Data Management**
-- **Country-specific Overrides** - Localized configuration values
-- **Version-Based Conflict Detection** - Optimistic locking prevents data loss
-- **Transaction Safety** - ACID compliance with timeout protection
-- **Automatic Migration** - Seamless version field migration
+- **Country-specific Overrides** - Easily manage localized configuration values.
+- **Version-Based Conflict Detection** - Optimistic locking to prevent data loss during concurrent updates.
+- **Transaction Safety** - ACID-compliant database operations with timeout protection.
 
 ### 🏗️ **Developer Experience**
-- **TypeScript** - Full type safety with strict configuration
-- **Modular Architecture** - Clean separation of concerns
-- **Comprehensive Testing** - Unit tests for critical business logic
-- **API Documentation** - Self-documenting endpoints
-- **Development Tools** - Hot reload, linting, and build optimization
+- **TypeScript** - Full type safety with strict compiler options.
+- **Modular Architecture** - Clean separation of concerns for better maintainability.
+- **Interactive API Documentation** - Self-documenting endpoints with Swagger UI.
+- **Development Tools** - Hot-reloading, linting, and optimized build process.
 
-## 📡 API Endpoints
+## 📡 API Documentation
 
-### 🔍 **Health & Monitoring**
-- `GET /health` - Comprehensive health check (database, cache, auth)
-- `GET /health/quick` - Simple OK/ERROR for load balancers
-- `GET /health/ready` - Kubernetes readiness probe
-- `GET /health/live` - Kubernetes liveness probe
-- `GET /health/cache` - Redis cache service status
-- `GET /metrics` - System performance metrics
+This project uses Swagger for interactive API documentation. When the development server is running, you can access the Swagger UI at:
 
-### 🔐 **Admin Endpoints** (Firebase Auth Required)
-- `GET /api/parameters` - Get all parameters with query filters
-- `GET /api/parameters/:id` - Get single parameter by ID
-- `POST /api/parameters` - Create new parameter
-- `PUT /api/parameters/:id` - Update parameter with conflict detection
-- `DELETE /api/parameters/:id` - Delete parameter (with safety checks)
+**[http://localhost:3000/api-docs](http://localhost:3000/api-docs)**
 
-### 📱 **Client Endpoints** (API Key Required)
-- `GET /api/client-config?country=US` - Get optimized client configuration
+The documentation provides detailed information about all available endpoints, including request parameters, response schemas, and authentication requirements. You can also execute API requests directly from the browser.
 
 ## 🛠️ Local Development
 
 ### Prerequisites
-- **Node.js 18+** 
-- **Redis Server** (installed automatically via setup)
-- **Firebase Project** with Admin SDK
-- **npm or yarn**
+- **Node.js 18+**
+- **Redis Server** (can be installed with `brew install redis` on macOS)
+- **Firebase Project** with Admin SDK credentials.
+- **npm** or **yarn**
 
 ### Quick Setup
 ```bash
-# 1. Clone and install
+# 1. Clone the repository
 git clone <repository-url>
 cd acme-configuration-manager-api
+
+# 2. Install dependencies
 npm install
 
-# 2. Setup environment
+# 3. Set up environment variables
 cp env.example .env
-# Edit .env with your Firebase credentials and API keys
+# Edit .env with your Firebase credentials, API keys, and other settings.
 
-# 3. Install and start Redis (macOS)
-brew install redis
+# 4. Start Redis (if not already running)
+# On macOS with Homebrew:
 brew services start redis
 
-# 4. Start development server
+# 5. Start the development server
 npm run dev
 ```
+The API will be available at `http://localhost:3000`.
 
 ### Environment Variables
+The `.env` file is used to configure the application. Refer to `env.example` for the full list of required variables.
+
 ```bash
 # Server Configuration
 PORT=3000
 NODE_ENV=development
 
-# Firebase Admin SDK
+# Firebase Admin SDK (as a single line JSON string or separate variables)
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com
-# ... other Firebase config
 
 # Security
 MOBILE_API_KEY=your-secret-api-key-minimum-32-characters-long
-ALLOWED_ORIGINS=http://localhost:5173,https://your-domain.com
+ALLOWED_ORIGINS=http://localhost:5173,https://your-frontend-domain.com
 
 # Redis Caching
 REDIS_URL=redis://localhost:6379
-
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
 ```
 
-## 🚀 Production Deployment
+### Available Scripts
 
-### Render.com with Redis (Recommended)
-
-Your `render.yaml` includes Redis service configuration:
-
-```yaml
-services:
-  # Redis Service
-  - type: redis
-    name: acme-config-redis
-    region: oregon
-    plan: starter # $7/month
-    
-  # Web Service
-  - type: web
-    name: acme-config-api
-    # ... automatic Redis connection
-```
-
-**Deployment Steps:**
-1. Update `render.yaml` with your credentials
-2. Push to GitHub/GitLab
-3. Create Blueprint service in Render dashboard
-4. Redis will be automatically provisioned and connected
-
-### Alternative Redis Options
-
-#### Free Tier Options:
-- **Redis Cloud** - Free tier available
-- **Upstash Redis** - 10k commands/day free
-- **Local Development** - Redis installed locally
-
-#### Without Redis:
-The application gracefully falls back to database-only mode if Redis is unavailable.
+- `npm run dev`: Starts the development server with hot-reloading using `ts-node` and Node's `--watch` flag.
+- `npm start`: Starts the production-ready server from the compiled JavaScript files in `dist/`. Requires `npm run build` to be run first.
+- `npm run build`: Compiles the TypeScript source code into JavaScript in the `dist/` directory.
+- `npm run lint`: Lints the source code using ESLint to check for code quality and style issues.
+- `npm run lint:fix`: Lints the code and automatically fixes issues where possible.
 
 ## 🔐 Authentication & Security
 
 ### Firebase Authentication (Admin Operations)
+Admin endpoints are secured using Firebase Authentication (JWT Bearer tokens).
+
 ```bash
-curl -H "Authorization: Bearer <firebase-token>" \
-     -H "Content-Type: application/json" \
+curl -H "Authorization: Bearer <firebase-id-token>" \
      https://your-api.onrender.com/api/parameters
 ```
 
 ### API Key Authentication (Client Access)
+Client-facing endpoints are secured with API keys. The key must be passed in the `x-api-key` header.
+
 ```bash
 curl -H "x-api-key: your-api-key" \
      https://your-api.onrender.com/api/client-config?country=US
 ```
 
 ### Rate Limiting Tiers
-- **General API**: 100 requests/15 minutes
-- **Admin Operations**: 50 requests/15 minutes  
-- **Client Config**: 30 requests/minute
-- **Sensitive Operations**: 10 requests/hour
+- **General API**: 100 requests / 15 minutes
+- **Admin Operations**: 50 requests / 15 minutes
+- **Client Config**: 30 requests / minute
+- **Sensitive Operations**: 10 requests / hour
+
+## 🚀 API Endpoints
+
+### 🔍 Health & Monitoring
+- `GET /health`: Comprehensive health check (database, cache, auth).
+- `GET /health/quick`: Simple OK/ERROR for load balancers.
+- `GET /health/ready`: Kubernetes readiness probe.
+- `GET /health/live`: Kubernetes liveness probe.
+- `GET /health/cache`: Redis cache service status.
+- `GET /metrics`: System performance metrics.
+
+### 🔐 Admin Endpoints (Firebase Auth Required)
+- `GET /api/parameters`: Get all parameters with query filters.
+- `GET /api/parameters/:id`: Get a single parameter by ID.
+- `POST /api/parameters`: Create a new parameter.
+- `PUT /api/parameters/:id`: Update a parameter (with conflict detection).
+- `DELETE /api/parameters/:id`: Delete a parameter.
+- `GET /api/parameters/:id/overrides/country`: Get all country overrides for a parameter.
+- `PUT /api/parameters/:id/overrides/country/:countryCode`: Set or update a country-specific override.
+- `DELETE /api/parameters/:id/overrides/country/:countryCode`: Delete a country-specific override.
+
+### 📱 Client Endpoints (API Key Required)
+- `GET /api/client-config?country=US`: Get the optimized client configuration for a specific country.
 
 ## 📊 Parameter Structure
+The `Parameter` object in the database can have a rich structure. The example below shows a full object. API responses may vary based on the endpoint.
 
 ```json
 {
@@ -191,28 +191,23 @@ curl -H "x-api-key: your-api-key" \
 ## 🚨 Error Handling & Monitoring
 
 ### Custom Error Classes
-```javascript
-// Specific error types with proper HTTP status codes
-ParameterNotFoundError     // 404
-ValidationError           // 400  
-DatabaseError            // 500
-ConflictError            // 409
-AuthenticationError      // 401
-RateLimitError          // 429
-```
+The API uses custom error classes to provide meaningful HTTP status codes.
+- `ParameterNotFoundError` -> `404 Not Found`
+- `ValidationError` -> `400 Bad Request`
+- `DatabaseError` -> `500 Internal Server Error`
+- `ConflictError` -> `409 Conflict`
+- `AuthenticationError` -> `401 Unauthorized`
+- `RateLimitError` -> `429 Too Many Requests`
 
-### Health Check Response
+### Health Check Response Example
 ```json
 {
   "status": "healthy",
+  "timestamp": "2024-07-26T10:00:00.000Z",
   "services": {
     "database": { "status": "healthy", "latency": 45 },
     "cache": { "status": "healthy", "keyCount": 156 },
     "authentication": { "status": "healthy" }
-  },
-  "metrics": {
-    "memory": { "used": 58011976, "percentage": 91 },
-    "process": { "uptime": 3600 }
   }
 }
 ```
@@ -220,77 +215,55 @@ RateLimitError          // 429
 ## 🔄 Advanced Features
 
 ### Conflict Detection & Resolution
-```javascript
-// Optimistic locking with detailed conflict information
+The API uses optimistic locking to prevent race conditions. When updating a parameter, you must provide the `lastKnownVersion`. If the version on the server is different, a `409 Conflict` error is returned.
+
+```http
 PUT /api/parameters/123
+Content-Type: application/json
+
 {
   "lastKnownVersion": 5,
-  "key": "feature_flag",
   "value": false
 }
-
-// Conflict Response (409)
+```
+**Conflict Response (409):**
+```json
 {
   "error": "Conflict",
+  "message": "The resource has been modified by another process.",
   "conflictDetails": {
     "currentVersion": 7,
-    "providedVersion": 5,
-    "lastModifiedBy": "another.admin@company.com",
-    "conflictingFields": ["value", "overrides.country.US"]
-  },
-  "resolutionOptions": {
-    "forceUpdate": "Override changes (set forceUpdate: true)",
-    "fetchLatest": "Get latest version and retry"
+    "providedVersion": 5
   }
 }
 ```
 
-### Caching Strategy
-```javascript
-// Automatic cache-aside pattern
-const config = await cacheService.getOrSet(
-  `client-config:${country}`,
-  () => fetchConfigFromDatabase(country),
-  300 // 5 minute TTL
-);
+## 🚀 Production Deployment
 
-// Cache invalidation on updates
-await cacheService.invalidatePattern('client-config:*');
+### Render.com with Redis (Recommended)
+This project includes a `render.yaml` file for easy deployment on [Render](https://render.com/).
+
+```yaml
+services:
+  # Redis Service
+  - type: redis
+    name: acme-config-redis
+    region: oregon # or your preferred region
+    plan: starter
+
+  # Web Service
+  - type: web
+    name: acme-config-api
+    env: node
+    # ... other configurations
+    # Render automatically sets the REDIS_URL environment variable
 ```
 
-### Request Performance Monitoring
-```javascript
-// Automatic slow request detection
-app.use(performanceLoggingMiddleware(2000)); // Log requests > 2s
-
-// Request correlation for debugging
-X-Correlation-ID: uuid-for-request-tracking
-```
-
-## 🏗️ Architecture
-
-```
-src/
-├── config/              # Firebase and database configuration
-├── controllers/         # Request handlers with error handling
-├── middleware/          # Auth, validation, rate limiting, logging
-│   ├── auth.ts         # Firebase and API key authentication
-│   ├── validation.ts   # Deep input validation and security
-│   ├── rateLimiting.ts # Multi-tier rate limiting
-│   └── requestLogging.ts # Performance and audit logging
-├── services/            # Business logic services
-│   ├── cacheService.ts # Redis caching with fallbacks
-│   └── healthService.ts # System health monitoring
-├── routes/              # API route definitions
-│   ├── configRoutes.ts # Parameter management endpoints
-│   └── healthRoutes.ts # Health and monitoring endpoints
-├── types/               # TypeScript definitions and custom errors
-├── utils/               # Helper functions and utilities
-│   ├── configHelpers.ts # Parameter processing functions
-│   ├── logger.ts       # Structured logging
-│   └── userUtils.ts    # User management utilities
-└── index.ts            # Application bootstrap
-```
+**Deployment Steps:**
+1. Create a new "Blueprint" service on your Render dashboard.
+2. Connect the GitHub/GitLab repository.
+3. Render will automatically provision and connect the Redis instance.
+4. Ensure your production environment variables (like Firebase credentials) are set in the Render dashboard.
 
 ## 📈 Production Readiness Checklist
 
