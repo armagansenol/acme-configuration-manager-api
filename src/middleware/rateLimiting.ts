@@ -89,8 +89,8 @@ export const clientConfigLimiter = rateLimit({
 
 // Very strict rate limiting for sensitive operations (delete)
 export const sensitiveOperationLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // Only 10 delete operations per hour
+  windowMs: 15 * 60 * 1000, // 15 minutes (reduced from 1 hour for development)
+  max: 50, // 50 delete operations per 15 minutes (increased from 10 per hour for development)
   message: {
     error: "Too many sensitive operations",
     message: "Too many sensitive operations from this IP, please try again later.",
@@ -113,7 +113,7 @@ export const sensitiveOperationLimiter = rateLimit({
     res.status(429).json({
       error: "Too many sensitive operations",
       message: "Too many sensitive operations from this IP, please try again later.",
-      retryAfter: 3600, // 1 hour in seconds
+      retryAfter: 900, // 15 minutes in seconds (reduced from 1 hour)
     })
   },
 })
