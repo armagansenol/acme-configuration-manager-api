@@ -203,7 +203,7 @@ export const updateParameter: ExpressController = async (req, res) => {
           providedVersion: lastKnownVersion,
           lastModifiedBy: lastModifiedByEmail,
           lastModifiedAt: existingData.updatedAt,
-          conflictingFields: detectConflictingFields(updateData, existingData),
+          conflictingFields: detectConflictingFields(updateData, existingData as ParameterData),
         })
       }
 
