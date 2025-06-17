@@ -12,6 +12,7 @@ export interface ParameterData {
   description?: string
   overrides?: ParameterOverrides
   isActive?: boolean
+  version: number
   createdAt?: any
   updatedAt?: any
   lastUpdatedBy?: string
@@ -46,5 +47,17 @@ export function prepareParameterForStorage(data: ParameterData): ParameterData {
     prepared.overrides = {}
   }
 
+  // Ensure version is set (default to 0 for new parameters)
+  if (prepared.version === undefined) {
+    prepared.version = 0
+  }
+
   return prepared
+}
+
+/**
+ * Increment version for updates
+ */
+export function incrementVersion(currentVersion: number): number {
+  return currentVersion + 1
 }
