@@ -34,7 +34,42 @@ router.get("/health", (req, res) => {
   res.status(200).send("OK")
 })
 
-// This route is for getting the client configuration
+/**
+ * @swagger
+ * /api/client-config:
+ *   get:
+ *     summary: Get client configuration
+ *     description: Retrieve configuration parameters for mobile/client applications. This endpoint provides a simplified configuration object optimized for client consumption with country-specific overrides applied.
+ *     tags: [Client Configuration]
+ *     security:
+ *       - apiKey: []
+ *     parameters:
+ *       - in: query
+ *         name: country
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Country code to apply country-specific overrides (e.g., 'US', 'GB')
+ *         example: US
+ *     responses:
+ *       200:
+ *         description: Client configuration object with resolved country overrides
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: true
+ *               example:
+ *                 feature_enabled: true
+ *                 max_retry_count: 3
+ *                 timeout_ms: 5000
+ *       400:
+ *         description: Invalid query parameters
+ *       401:
+ *         description: Invalid or missing API key
+ *       500:
+ *         description: Internal server error
+ */
 router.get("/client-config", verifyApiKey, validateQuery(querySchema), getClientConfig)
 
 // All other routes below this require Firebase authentication
