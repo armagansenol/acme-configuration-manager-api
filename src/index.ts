@@ -3,6 +3,8 @@
  * Entry point for the application
  */
 
+console.log("Starting application initialization...")
+
 import { config } from "dotenv"
 import express from "express"
 import cors from "cors"
@@ -28,16 +30,20 @@ if (!process.env.NODE_ENV) {
 logger.startup("ACME Configuration Manager API starting...")
 logger.startup(`Environment: ${process.env.NODE_ENV}`)
 
-// Initialize Firebase
+// Initialize Firebase - this will run immediately when imported
+logger.startup("Initializing Firebase...")
 import "./config/firebase"
+logger.startup("Firebase initialization completed")
 
 // Initialize cache service
 const initializeServices = async () => {
   try {
+    logger.startup("Attempting to connect to cache service...")
     await cacheService.connect()
-    logger.startup("Cache service initialized")
+    logger.startup("Cache service initialized successfully")
   } catch (error) {
     logger.errorWithContext("Failed to initialize cache service", error)
+    logger.startup("Continuing without cache service - using fallbacks")
     // Continue without cache - the service will handle fallbacks
   }
 }
@@ -249,13 +255,18 @@ async function startServer() {
     logger.startup("🚀 Initializing services...")
 
     // Initialize cache service
+    logger.startup("Starting cache service initialization...")
     await initializeServices()
+    logger.startup("Cache service initialization completed")
 
     // Start server (for Cloud Run and local development)
     // Cloud Run requires binding to 0.0.0.0 on the PORT environment variable
     const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"
 
+    logger.startup(`Attempting to bind to ${HOST}:${PORT}...`)
+    console.log(`BINDING: Attempting to bind to ${HOST}:${PORT}...`)
     app.listen(PORT, HOST, () => {
+      console.log(`SUCCESS: Server running on ${HOST}:${PORT}`)
       logger.startup(`🚀 Server running on ${HOST}:${PORT}`)
       logger.startup("📡 API endpoints available:")
       logger.startup("  GET  /health - Comprehensive health check")
@@ -298,6 +309,10 @@ process.on("SIGTERM", gracefulShutdown)
 process.on("SIGINT", gracefulShutdown)
 
 // Start the server
-startServer()
+console.log("About to call startServer()...")
+startServer().catch((error) => {
+  console.error("CRITICAL ERROR: startServer failed:", error)
+  process.exit(1)
+})
 
 export default app
