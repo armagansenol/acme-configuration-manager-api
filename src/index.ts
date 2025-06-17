@@ -55,7 +55,7 @@ const PORT = parseInt(process.env.PORT || "3000", 10)
 
 // Trust proxy setting - required for Render and other proxy environments
 // This allows express-rate-limit to correctly identify users behind proxies
-app.set("trust proxy", true)
+app.set("trust proxy", 1)
 
 // Security middleware
 app.use(helmet())
@@ -89,13 +89,13 @@ const corsOptions = {
 }
 app.use(cors(corsOptions))
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000"), // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100"), // limit each IP to 100 requests per windowMs
-  message: "Too many requests from this IP, please try again later.",
-})
-app.use(limiter)
+// Rate limiting is now handled at the route level in configRoutes.ts
+// const limiter = rateLimit({
+//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000"), // 15 minutes
+//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100"), // limit each IP to 100 requests per windowMs
+//   message: "Too many requests from this IP, please try again later.",
+// })
+// app.use(limiter)
 
 // Compression
 app.use(compression())
