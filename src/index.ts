@@ -153,6 +153,40 @@ app.get("/ping", (req, res) => {
   })
 })
 
+// Root API information endpoint
+app.get("/", (req, res) => {
+  res.status(200).json({
+    name: "ACME Configuration Manager API",
+    version: "1.0.0",
+    description: "API for managing application configuration parameters with country-specific overrides",
+    status: "running",
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: {
+        "/ping": "Quick health check",
+        "/health": "Comprehensive health status",
+        "/health/quick": "Lightweight health check for load balancers",
+        "/health/ready": "Kubernetes readiness probe",
+        "/health/live": "Kubernetes liveness probe",
+        "/health/cache": "Cache health and statistics",
+        "/metrics": "System metrics",
+      },
+      api: {
+        "/api/client-config": "Get client configuration (requires API key)",
+        "/api/parameters": "Manage configuration parameters (requires authentication)",
+      },
+      documentation: {
+        "/api-docs": "Interactive API documentation (Swagger UI)",
+      },
+    },
+    links: {
+      documentation: `${req.protocol}://${req.get("host")}/api-docs`,
+      health: `${req.protocol}://${req.get("host")}/health`,
+      repository: "https://github.com/your-org/acme-configuration-manager-api",
+    },
+  })
+})
+
 // API Docs
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
