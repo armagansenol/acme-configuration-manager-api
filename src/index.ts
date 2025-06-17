@@ -15,6 +15,8 @@ import morgan from "morgan"
 import { logger } from "./utils/logger"
 import configRoutes from "./routes/configRoutes"
 import healthRoutes from "./routes/healthRoutes"
+import swaggerUi from "swagger-ui-express"
+import swaggerSpec from "./config/swaggerConfig"
 import { cacheService } from "./services/cacheService"
 import { healthService } from "./services/healthService"
 import { errorLoggingMiddleware } from "./middleware/requestLogging"
@@ -64,6 +66,15 @@ app.use(helmet())
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()) || [
   "http://localhost:5173",
 ]
+
+// In development, allow the API's own origin for Swagger UI
+if (process.env.NODE_ENV === "development") {
+  const selfOrigin = `http://localhost:${PORT}`
+  if (!allowedOrigins.includes(selfOrigin)) {
+    allowedOrigins.push(selfOrigin)
+  }
+}
+
 logger.startup(`CORS allowed origins: ${JSON.stringify(allowedOrigins)}`)
 
 const corsOptions = {
@@ -142,39 +153,8 @@ app.get("/ping", (req, res) => {
   })
 })
 
-// Root endpoint - API documentation
-app.get("/", (req, res) => {
-  res.status(200).json({
-    name: "ACME Configuration Manager API",
-    version: "1.0.0",
-    description: "A robust configuration management API for dynamic application parameters",
-    features: {
-      conflictDetection: "Version-based optimistic locking",
-      countryOverrides: "Localized configuration support",
-      realTimeUpdates: "Immediate conflict detection on save",
-    },
-    endpoints: {
-      ping: "GET /ping - Simple health check",
-      health: "GET /health - Comprehensive health check",
-      parameters: {
-        list: "GET /api/parameters - Get all parameters (Firebase Auth required)",
-        get: "GET /api/parameters/:id - Get single parameter (Firebase Auth required)",
-        create: "POST /api/parameters - Create parameter (Firebase Auth required)",
-        update: "PUT /api/parameters/:id - Update parameter with conflict detection (Firebase Auth required)",
-        delete: "DELETE /api/parameters/:id - Delete parameter (Firebase Auth required)",
-      },
-      clientConfig: "GET /api/client-config - Get client configuration (API Key required in x-api-key header)",
-    },
-    authentication: {
-      firebase: "Include 'Authorization: Bearer <firebase-token>' header",
-      apiKey: "Include 'x-api-key: <your-api-key>' header",
-    },
-    conflictResolution: {
-      detection: "Automatic on save with lastKnownVersion",
-      options: ["forceUpdate: true", "fetch latest and retry", "cancel operation"],
-    },
-  })
-})
+// API Docs
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 // Health check and metrics routes
 app.use("/", healthRoutes)

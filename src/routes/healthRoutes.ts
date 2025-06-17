@@ -6,8 +6,21 @@ import { logger } from "../utils/logger"
 const router = Router()
 
 /**
- * Comprehensive health check endpoint
- * Returns detailed status of all services
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Comprehensive health check
+ *     description: Returns the detailed health status of all integrated services.
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: The service is healthy or degraded, but operational.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthStatus'
+ *       503:
+ *         description: The service is unhealthy and not operational.
  */
 router.get("/health", async (req, res) => {
   try {
@@ -27,8 +40,17 @@ router.get("/health", async (req, res) => {
 })
 
 /**
- * Quick health check for load balancers
- * Simple OK/ERROR response
+ * @swagger
+ * /health/quick:
+ *   get:
+ *     summary: Quick health check
+ *     description: A lightweight endpoint for load balancers to quickly determine if the service is up.
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: The service is up.
+ *       503:
+ *         description: The service is down.
  */
 router.get("/health/quick", async (req, res) => {
   try {
@@ -44,8 +66,17 @@ router.get("/health/quick", async (req, res) => {
 })
 
 /**
- * Readiness probe for Kubernetes
- * Checks if the service is ready to accept traffic
+ * @swagger
+ * /health/ready:
+ *   get:
+ *     summary: Readiness probe
+ *     description: For Kubernetes, to determine if the container is ready to handle traffic.
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: The service is ready for traffic.
+ *       503:
+ *         description: The service is not ready for traffic.
  */
 router.get("/health/ready", async (req, res) => {
   try {
@@ -61,8 +92,17 @@ router.get("/health/ready", async (req, res) => {
 })
 
 /**
- * Liveness probe for Kubernetes
- * Checks if the service is alive and should not be restarted
+ * @swagger
+ * /health/live:
+ *   get:
+ *     summary: Liveness probe
+ *     description: For Kubernetes, to determine if the container is still running.
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: The service is alive.
+ *       503:
+ *         description: The service is not alive and should be restarted.
  */
 router.get("/health/live", async (req, res) => {
   try {
@@ -78,7 +118,17 @@ router.get("/health/live", async (req, res) => {
 })
 
 /**
- * Cache statistics endpoint
+ * @swagger
+ * /health/cache:
+ *   get:
+ *     summary: Cache health and statistics
+ *     description: Returns the health status and performance statistics of the cache service.
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Cache is healthy.
+ *       503:
+ *         description: Cache is unhealthy.
  */
 router.get("/health/cache", async (req, res) => {
   try {
@@ -99,7 +149,17 @@ router.get("/health/cache", async (req, res) => {
 })
 
 /**
- * System metrics endpoint
+ * @swagger
+ * /metrics:
+ *   get:
+ *     summary: System metrics
+ *     description: Provides key system metrics like memory and CPU usage.
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: System metrics.
+ *       500:
+ *         description: Failed to retrieve metrics.
  */
 router.get("/metrics", async (req, res) => {
   try {
