@@ -1,8 +1,9 @@
 import { admin } from "../config/firebase"
 import { logger } from "./logger"
+import { cacheService, CacheKeys } from "../services/cacheService"
 
 /**
- * Resolves a user ID to the user's email address using Firebase Auth
+ * Resolves a user ID to the user's email address using Firebase Auth with caching
  * @param uid The Firebase user ID
  * @returns The user's email address or the original UID if resolution fails
  */
@@ -11,16 +12,25 @@ export async function resolveUserIdToEmail(uid: string): Promise<string> {
     return "unknown"
   }
 
-  try {
-    const userRecord = await admin.auth().getUser(uid)
+  const cacheKey = CacheKeys.USER_EMAIL(uid)
 
-    if (userRecord.email) {
-      logger.debug(`Resolved user ID ${uid} to email ${userRecord.email}`)
-      return userRecord.email
-    } else {
-      logger.warn(`User ${uid} has no email address`)
-      return uid // Fallback to UID if no email
-    }
+  try {
+    // Use cache-aside pattern for performance
+    const email = await cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        const userRecord = await admin.auth().getUser(uid)
+        if (userRecord.email) {
+          logger.debug(`Resolved user ID ${uid} to email ${userRecord.email} from source`)
+          return userRecord.email
+        } else {
+          logger.warn(`User ${uid} has no email address`)
+          return uid // Fallback to UID if no email, cache this result
+        }
+      },
+      24 * 60 * 60 // Cache for 24 hours
+    )
+    return email || uid // Fallback to UID if cache returns null/undefined
   } catch (error) {
     logger.warn(`Failed to resolve user ID ${uid} to email: ${error}`)
     return uid // Fallback to UID if resolution fails
@@ -28,7 +38,7 @@ export async function resolveUserIdToEmail(uid: string): Promise<string> {
 }
 
 /**
- * Resolves multiple user IDs to email addresses in parallel
+ * Resolves multiple user IDs to email addresses in parallel with caching
  * @param uids Array of Firebase user IDs
  * @returns Map of UID to email address
  */
