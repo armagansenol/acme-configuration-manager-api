@@ -57,8 +57,11 @@ const PORT = parseInt(process.env.PORT || "3000", 10)
 app.use(helmet())
 
 // CORS configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:5173"]
+logger.startup(`CORS allowed origins: ${JSON.stringify(allowedOrigins)}`)
+
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:5173"],
+  origin: allowedOrigins,
   credentials: true,
 }
 app.use(cors(corsOptions))
