@@ -261,7 +261,7 @@ export class CacheService {
   }
 
   /**
-   * Invalidate cache entries by pattern
+   * Invalidate cache entries by pattern using SCAN for production safety
    */
   async invalidatePattern(pattern: string): Promise<number> {
     try {
@@ -269,13 +269,23 @@ export class CacheService {
         await this.connect()
       }
 
-      const keys = await this.client.keys(pattern)
+      let cursor = 0
+      let deletedCount = 0
 
-      if (keys.length === 0) {
-        return 0
-      }
+      do {
+        // Use SCAN to iterate over keys without blocking the server
+        const reply = await this.client.scan(cursor, {
+          MATCH: pattern,
+          COUNT: 100, // Process 100 keys per iteration
+        })
 
-      const deletedCount = await this.client.del(keys)
+        if (reply.keys.length > 0) {
+          deletedCount += await this.client.del(reply.keys)
+        }
+
+        cursor = reply.cursor
+      } while (cursor !== 0)
+
       logger.info(`Pattern invalidation completed: ${deletedCount} entries removed for pattern: ${pattern}`)
       return deletedCount
     } catch (error) {
