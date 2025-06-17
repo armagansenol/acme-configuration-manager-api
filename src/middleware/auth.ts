@@ -69,7 +69,7 @@ export const verifyFirebaseToken = async (
 export const verifyApiKey = (req: Request, res: Response, next: NextFunction): void => {
   logger.auth(`API Key check for ${req.method} ${req.path}`)
 
-  const apiKey = req.headers.authorization
+  const apiKey = req.headers["x-api-key"] as string | undefined
 
   if (!apiKey) {
     logger.securityEvent(
@@ -82,20 +82,6 @@ export const verifyApiKey = (req: Request, res: Response, next: NextFunction): v
       "low"
     )
     res.status(401).json({ error: "Unauthorized", message: "No API key provided" })
-    return
-  }
-
-  if (!apiKey.startsWith("Bearer ")) {
-    logger.securityEvent(
-      "API Key Authentication Failed",
-      {
-        reason: "Invalid API key format",
-        endpoint: `${req.method} ${req.path}`,
-        ip: req.ip,
-      },
-      "low"
-    )
-    res.status(401).json({ error: "Unauthorized", message: "Invalid API key format" })
     return
   }
 
@@ -114,7 +100,7 @@ export const verifyApiKey = (req: Request, res: Response, next: NextFunction): v
   }
 
   // Use constant-time comparison to prevent timing attacks
-  const providedKey = apiKey.slice(7)
+  const providedKey = apiKey
   const expectedKey = process.env.MOBILE_API_KEY
 
   if (providedKey.length !== expectedKey.length) {
