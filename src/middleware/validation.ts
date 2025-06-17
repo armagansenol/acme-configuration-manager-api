@@ -80,6 +80,7 @@ const secureParameterValue = Joi.alternatives().try(
 const secureOverrides = Joi.object({
   country: Joi.object()
     .pattern(/^[A-Z]{2}$/, secureParameterValue)
+    .min(1)
     .optional()
     .custom((value, helpers) => {
       // Additional validation for country overrides
@@ -87,8 +88,16 @@ const secureOverrides = Joi.object({
         throw new ValidationError("Too many country overrides (max 50)", "overrides.country")
       }
       return value
-    }, "Country overrides validation"),
-}).optional()
+    }, "Country overrides validation")
+    .messages({
+      "object.min": "Country overrides cannot be an empty object. Please provide at least one country-specific value.",
+    }),
+})
+  .min(1)
+  .optional()
+  .messages({
+    "object.min": "Overrides object cannot be empty. Please provide at least one type of override (e.g., 'country').",
+  })
 
 // Enhanced Joi validation schemas with deep security validation
 export const parameterSchema = Joi.object({
