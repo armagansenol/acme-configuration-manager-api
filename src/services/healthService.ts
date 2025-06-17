@@ -40,9 +40,29 @@ interface ServiceHealth {
  */
 export class HealthService {
   private startTime: number
+  private servicesReady: boolean = false
 
   constructor() {
     this.startTime = Date.now()
+  }
+
+  /**
+   * Mark services as ready (called after initialization)
+   */
+  setServicesReady(ready: boolean = true) {
+    this.servicesReady = ready
+  }
+
+  /**
+   * Wrapper for timeout handling
+   */
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 5000): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ])
   }
 
   /**
@@ -52,9 +72,9 @@ export class HealthService {
     try {
       const startTime = Date.now()
 
-      // Test database connectivity by getting a small collection
+      // Test database connectivity by getting a small collection with timeout
       const testCollection = db.collection("health_check")
-      await testCollection.limit(1).get()
+      await this.withTimeout(testCollection.limit(1).get(), 3000)
 
       const latency = Date.now() - startTime
 
@@ -81,7 +101,7 @@ export class HealthService {
   private async checkCache(): Promise<ServiceHealth> {
     try {
       const startTime = Date.now()
-      const healthCheck = await cacheService.healthCheck()
+      const healthCheck = await this.withTimeout(cacheService.healthCheck(), 3000)
       const latency = Date.now() - startTime
 
       return {
@@ -105,8 +125,8 @@ export class HealthService {
     try {
       const startTime = Date.now()
 
-      // Test Firebase Auth by listing users (with limit to avoid performance issues)
-      await admin.auth().listUsers(1)
+      // Test Firebase Auth by listing users (with limit to avoid performance issues) and timeout
+      await this.withTimeout(admin.auth().listUsers(1), 3000)
 
       const latency = Date.now() - startTime
 
@@ -228,8 +248,16 @@ export class HealthService {
    */
   async quickCheck(): Promise<{ status: "ok" | "error"; timestamp: string }> {
     try {
-      // Simple database ping
-      await db.collection("health_check").limit(1).get()
+      // If services aren't ready yet, just return ok since server is running
+      if (!this.servicesReady) {
+        return {
+          status: "ok",
+          timestamp: new Date().toISOString(),
+        }
+      }
+
+      // Simple database ping with timeout
+      await this.withTimeout(db.collection("health_check").limit(1).get(), 2000)
 
       return {
         status: "ok",

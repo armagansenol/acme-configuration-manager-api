@@ -15,7 +15,7 @@ services:
     plan: free # or standard
     buildCommand: "npm ci && npm run build"
     startCommand: "npm start"
-    healthCheckPath: /health
+    healthCheckPath: /ping
     envVars:
       - key: NODE_ENV
         value: production

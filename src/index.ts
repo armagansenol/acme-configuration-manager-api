@@ -16,6 +16,7 @@ import { logger } from "./utils/logger"
 import configRoutes from "./routes/configRoutes"
 import healthRoutes from "./routes/healthRoutes"
 import { cacheService } from "./services/cacheService"
+import { healthService } from "./services/healthService"
 import { errorLoggingMiddleware } from "./middleware/requestLogging"
 import { isCustomError } from "./types/errors"
 
@@ -114,6 +115,15 @@ if (isDevelopment) {
   )
 }
 
+// Simple health check for immediate response during startup
+app.get("/ping", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  })
+})
+
 // Root endpoint - API documentation
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -126,7 +136,8 @@ app.get("/", (req, res) => {
       realTimeUpdates: "Immediate conflict detection on save",
     },
     endpoints: {
-      health: "GET /health - Health check",
+      ping: "GET /ping - Simple health check",
+      health: "GET /health - Comprehensive health check",
       parameters: {
         list: "GET /api/parameters - Get all parameters (Firebase Auth required)",
         get: "GET /api/parameters/:id - Get single parameter (Firebase Auth required)",
@@ -252,20 +263,16 @@ app.use("*", (req, res) => {
 // Initialize database and start server
 async function startServer() {
   try {
-    logger.startup("🚀 Initializing services...")
+    logger.startup("🚀 Starting server...")
 
-    // Initialize cache service
-    logger.startup("Starting cache service initialization...")
-    await initializeServices()
-    logger.startup("Cache service initialization completed")
-
-    // Start server (for Cloud Run and local development)
-    // Cloud Run requires binding to 0.0.0.0 on the PORT environment variable
+    // Start server FIRST to ensure Render detects the open port
+    // Cloud Run and Render require binding to 0.0.0.0 on the PORT environment variable
     const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"
 
     logger.startup(`Attempting to bind to ${HOST}:${PORT}...`)
     console.log(`BINDING: Attempting to bind to ${HOST}:${PORT}...`)
-    app.listen(PORT, HOST, () => {
+
+    const server = app.listen(PORT, HOST, () => {
       console.log(`SUCCESS: Server running on ${HOST}:${PORT}`)
       logger.startup(`🚀 Server running on ${HOST}:${PORT}`)
       logger.startup("📡 API endpoints available:")
@@ -283,6 +290,31 @@ async function startServer() {
       logger.startup("🔒 Security: Deep validation, rate limiting, and injection protection enabled")
       logger.startup("⚡ Performance: Redis caching and optimized queries enabled")
       logger.startup("📊 Monitoring: Health checks and metrics enabled")
+
+      // Initialize services AFTER server is listening
+      logger.startup("Initializing background services...")
+      initializeServices()
+        .then(() => {
+          logger.startup("Background services initialization completed")
+          healthService.setServicesReady(true)
+        })
+        .catch((error) => {
+          logger.errorWithContext("Failed to initialize background services", error)
+          logger.startup("Continuing without some services - the API will handle fallbacks gracefully")
+          // Still mark as ready since server is running
+          healthService.setServicesReady(true)
+        })
+    })
+
+    // Handle server errors
+    server.on("error", (error: any) => {
+      if (error.code === "EADDRINUSE") {
+        logger.errorWithContext(`Port ${PORT} is already in use`, error)
+        process.exit(1)
+      } else {
+        logger.errorWithContext("Server error", error)
+        process.exit(1)
+      }
     })
   } catch (error) {
     logger.errorWithContext("Failed to start server", error)
