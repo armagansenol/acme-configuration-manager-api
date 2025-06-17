@@ -7,7 +7,7 @@ export interface ParameterOverrides {
   // Future override types can be added here (e.g., device, region, platform, etc.)
 }
 
-export type ParameterValue = string | number | boolean | object | null
+export type ParameterValue = string | number | boolean | null
 
 export interface ParameterData {
   id?: string
@@ -33,15 +33,15 @@ export interface ParameterBody {
 }
 
 /**
- * Resolves parameter value with country-specific overrides
+ * Enhanced parameter value resolution with sophisticated fallback logic
  */
 export function resolveParameterValue(parameterData: ParameterData, country?: string): ParameterValue {
-  let value: ParameterValue = parameterData.value // Default value
+  let value: ParameterValue = parameterData.value // Global default value
 
   if (country && typeof country === "string") {
     const countryCode = country.toUpperCase()
 
-    // Check overrides structure
+    // If a country-specific override exists, use it
     if (parameterData.overrides?.country?.[countryCode] !== undefined) {
       value = parameterData.overrides.country[countryCode]
     }

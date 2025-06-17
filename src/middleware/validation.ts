@@ -71,23 +71,7 @@ const secureParameterKey = Joi.string()
 const secureParameterValue = Joi.alternatives().try(
   secureString.max(10000), // Strings with security checks
   Joi.number().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER), // Safe numbers
-  Joi.boolean(),
-  Joi.object()
-    .max(100)
-    .custom((value, helpers) => {
-      // Check for prototype pollution attempts
-      const dangerousKeys = ["__proto__", "constructor", "prototype"]
-      for (const key of Object.keys(value)) {
-        if (dangerousKeys.includes(key)) {
-          throw new ValidationError(
-            `Dangerous property name detected: ${key}`,
-            helpers.state.path?.join(".") || "object"
-          )
-        }
-      }
-      return value
-    }, "Object security validation"),
-  Joi.array().max(1000) // Limit array size
+  Joi.boolean()
 )
 
 /**
@@ -149,10 +133,48 @@ export const updateParameterSchema = Joi.object({
 
 export const deleteParameterSchema = Joi.object({})
 
+export const countryOverrideSchema = Joi.object({
+  value: secureParameterValue.required().messages({
+    "any.required": "Override value is required",
+  }),
+  lastKnownVersion: Joi.number().integer().min(0).optional().messages({
+    "number.base": "Last known version must be a number",
+    "number.integer": "Last known version must be an integer",
+    "number.min": "Last known version cannot be negative",
+  }),
+  forceUpdate: Joi.boolean().optional().default(false).messages({
+    "boolean.base": "Force update must be a boolean value",
+  }),
+})
+
+export const deleteCountryOverrideSchema = Joi.object({
+  lastKnownVersion: Joi.number().integer().min(0).optional().messages({
+    "number.base": "Last known version must be a number",
+    "number.integer": "Last known version must be an integer",
+    "number.min": "Last known version cannot be negative",
+  }),
+  forceUpdate: Joi.boolean().optional().default(false).messages({
+    "boolean.base": "Force update must be a boolean value",
+  }),
+})
+
 export const idParamSchema = Joi.object({
   id: Joi.string().required().messages({
     "any.required": "Parameter ID is required",
   }),
+})
+
+export const countryParamSchema = Joi.object({
+  id: Joi.string().required().messages({
+    "any.required": "Parameter ID is required",
+  }),
+  countryCode: Joi.string()
+    .pattern(/^[A-Z]{2}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Country code must be 2 uppercase letters",
+      "any.required": "Country code is required",
+    }),
 })
 
 export const querySchema = Joi.object({
