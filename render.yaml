@@ -29,7 +29,7 @@ services:
         value: firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
       - key: FIREBASE_CLIENT_ID
         value: your-client-id
-      - key: MOBILE_API_KEY
+      - key: CLIENT_CONFIG_API_KEY
         value: your-secret-mobile-api-key-minimum-32-characters-long
       - key: ALLOWED_ORIGINS
         value: https://your-frontend-domain.com

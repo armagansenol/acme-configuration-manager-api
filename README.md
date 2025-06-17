@@ -102,7 +102,7 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com
 
 # Security
-MOBILE_API_KEY=your-secret-api-key-minimum-32-characters-long
+CLIENT_CONFIG_API_KEY=your-secret-api-key-minimum-32-characters-long
 ALLOWED_ORIGINS=http://localhost:5173,https://your-frontend-domain.com
 
 # Redis Caching

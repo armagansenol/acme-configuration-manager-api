@@ -86,11 +86,11 @@ export const verifyApiKey = (req: Request, res: Response, next: NextFunction): v
   }
 
   // Validate API key length to prevent timing attacks
-  if (!process.env.MOBILE_API_KEY || process.env.MOBILE_API_KEY.length < 32) {
+  if (!process.env.CLIENT_CONFIG_API_KEY || process.env.CLIENT_CONFIG_API_KEY.length < 32) {
     logger.securityEvent(
       "Server Configuration Error",
       {
-        reason: "MOBILE_API_KEY not configured properly",
+        reason: "CLIENT_CONFIG_API_KEY not configured properly",
         endpoint: `${req.method} ${req.path}`,
       },
       "critical"
@@ -101,7 +101,7 @@ export const verifyApiKey = (req: Request, res: Response, next: NextFunction): v
 
   // Use constant-time comparison to prevent timing attacks
   const providedKey = apiKey
-  const expectedKey = process.env.MOBILE_API_KEY
+  const expectedKey = process.env.CLIENT_CONFIG_API_KEY
 
   if (providedKey.length !== expectedKey.length) {
     logger.securityEvent(
