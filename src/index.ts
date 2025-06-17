@@ -12,6 +12,10 @@ import rateLimit from "express-rate-limit"
 import morgan from "morgan"
 import { logger } from "./utils/logger"
 import configRoutes from "./routes/configRoutes"
+import healthRoutes from "./routes/healthRoutes"
+import { cacheService } from "./services/cacheService"
+import { errorLoggingMiddleware } from "./middleware/requestLogging"
+import { isCustomError } from "./types/errors"
 
 // Load environment variables FIRST
 config()
@@ -26,6 +30,17 @@ logger.startup(`Environment: ${process.env.NODE_ENV}`)
 
 // Initialize Firebase
 import "./config/firebase"
+
+// Initialize cache service
+const initializeServices = async () => {
+  try {
+    await cacheService.connect()
+    logger.startup("Cache service initialized")
+  } catch (error) {
+    logger.errorWithContext("Failed to initialize cache service", error)
+    // Continue without cache - the service will handle fallbacks
+  }
+}
 
 // Create Express app
 const app = express()
@@ -99,12 +114,18 @@ app.get("/", (req, res) => {
     name: "ACME Configuration Manager API",
     version: "1.0.0",
     description: "A robust configuration management API for dynamic application parameters",
+    features: {
+      conflictDetection: "Version-based optimistic locking",
+      countryOverrides: "Localized configuration support",
+      realTimeUpdates: "Immediate conflict detection on save",
+    },
     endpoints: {
       health: "GET /health - Health check",
       parameters: {
         list: "GET /api/parameters - Get all parameters (Firebase Auth required)",
+        get: "GET /api/parameters/:id - Get single parameter (Firebase Auth required)",
         create: "POST /api/parameters - Create parameter (Firebase Auth required)",
-        update: "PUT /api/parameters/:id - Update parameter (Firebase Auth required)",
+        update: "PUT /api/parameters/:id - Update parameter with conflict detection (Firebase Auth required)",
         delete: "DELETE /api/parameters/:id - Delete parameter (Firebase Auth required)",
       },
       clientConfig: "GET /api/client-config - Get client configuration (API Key required in x-api-key header)",
@@ -113,25 +134,47 @@ app.get("/", (req, res) => {
       firebase: "Include 'Authorization: Bearer <firebase-token>' header",
       apiKey: "Include 'x-api-key: <your-api-key>' header",
     },
+    conflictResolution: {
+      detection: "Automatic on save with lastKnownVersion",
+      options: ["forceUpdate: true", "fetch latest and retry", "cancel operation"],
+    },
   })
 })
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "OK",
-    timestamp: new Date().toISOString(),
-    // Removed environment info for security
-  })
-})
+// Health check and metrics routes
+app.use("/", healthRoutes)
 
 // API routes
 app.use("/api", configRoutes)
+
+// Error logging middleware
+app.use(errorLoggingMiddleware)
 
 // Enhanced error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   // Generate unique error ID for tracking
   const errorId = `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+  // Handle custom errors with proper status codes
+  if (isCustomError(err)) {
+    const statusCode = err.statusCode
+    const response = {
+      error: err.name,
+      message: err.message,
+      errorId: errorId,
+      ...(err.name === "ValidationError" && (err as any).field && { field: (err as any).field }),
+    }
+
+    logger.errorWithContext("Custom error", err, {
+      errorId,
+      url: req.url,
+      method: req.method,
+      statusCode,
+    })
+
+    res.status(statusCode).json(response)
+    return
+  }
 
   // Log error with sanitized context
   logger.errorWithContext("Unhandled error", err, {
@@ -200,19 +243,61 @@ app.use("*", (req, res) => {
   res.status(404).json({ error: "Not found", message: "The requested resource was not found." })
 })
 
-// Start server (for Cloud Run and local development)
-// Cloud Run requires binding to 0.0.0.0 on the PORT environment variable
-const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"
+// Initialize database and start server
+async function startServer() {
+  try {
+    logger.startup("🚀 Initializing services...")
 
-app.listen(PORT, HOST, () => {
-  logger.startup(`🚀 Server running on ${HOST}:${PORT}`)
-  logger.startup("📡 API endpoints available:")
-  logger.startup("  GET  /health - Health check")
-  logger.startup("  GET  /api/parameters - Get all parameters (Firebase Auth)")
-  logger.startup("  POST /api/parameters - Create parameter (Firebase Auth)")
-  logger.startup("  PUT  /api/parameters/:id - Update parameter (Firebase Auth)")
-  logger.startup("  DELETE /api/parameters/:id - Delete parameter (Firebase Auth)")
-  logger.startup("  GET  /api/client-config - Get client config (API Key)")
-})
+    // Initialize cache service
+    await initializeServices()
+
+    // Start server (for Cloud Run and local development)
+    // Cloud Run requires binding to 0.0.0.0 on the PORT environment variable
+    const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"
+
+    app.listen(PORT, HOST, () => {
+      logger.startup(`🚀 Server running on ${HOST}:${PORT}`)
+      logger.startup("📡 API endpoints available:")
+      logger.startup("  GET  /health - Comprehensive health check")
+      logger.startup("  GET  /health/quick - Quick health check")
+      logger.startup("  GET  /health/ready - Readiness probe")
+      logger.startup("  GET  /health/live - Liveness probe")
+      logger.startup("  GET  /metrics - System metrics")
+      logger.startup("  GET  /api/parameters - Get all parameters (Firebase Auth)")
+      logger.startup("  GET  /api/parameters/:id - Get single parameter (Firebase Auth)")
+      logger.startup("  POST /api/parameters - Create parameter (Firebase Auth)")
+      logger.startup("  PUT  /api/parameters/:id - Update parameter with conflict detection (Firebase Auth)")
+      logger.startup("  DELETE /api/parameters/:id - Delete parameter (Firebase Auth)")
+      logger.startup("  GET  /api/client-config - Get client config (API Key)")
+      logger.startup("🔒 Security: Deep validation, rate limiting, and injection protection enabled")
+      logger.startup("⚡ Performance: Redis caching and optimized queries enabled")
+      logger.startup("📊 Monitoring: Health checks and metrics enabled")
+    })
+  } catch (error) {
+    logger.errorWithContext("Failed to start server", error)
+    process.exit(1)
+  }
+}
+
+// Graceful shutdown
+const gracefulShutdown = async () => {
+  logger.startup("Graceful shutdown initiated...")
+
+  try {
+    // Disconnect cache service
+    await cacheService.disconnect()
+    logger.startup("Cache service disconnected")
+  } catch (error) {
+    logger.errorWithContext("Error during cache service shutdown", error)
+  }
+
+  process.exit(0)
+}
+
+process.on("SIGTERM", gracefulShutdown)
+process.on("SIGINT", gracefulShutdown)
+
+// Start the server
+startServer()
 
 export default app
