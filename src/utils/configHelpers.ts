@@ -9,6 +9,7 @@ import {
   incrementVersion,
   ParameterBody,
   ParameterValue,
+  ParameterOverrides,
 } from "./parameterUtils"
 
 /**
@@ -47,7 +48,7 @@ export function transformDocumentToParameterData(doc: QueryDocumentSnapshot): Pa
 }
 
 /**
- * Build configuration object from parameter documents
+ * Build configuration object from parameter documents (simple country override → default)
  */
 export function buildConfigurationObject(
   docs: QueryDocumentSnapshot[],
@@ -282,4 +283,117 @@ export function sanitizeParameterForResponse(
   }
 
   return sanitized
+}
+
+/**
+ * Merge overrides intelligently, preserving existing values while adding new ones
+ */
+export function mergeOverrides(
+  existingOverrides: ParameterOverrides,
+  newOverrides: ParameterOverrides,
+  operation: "merge" | "replace" = "merge"
+): ParameterOverrides {
+  if (operation === "replace") {
+    return newOverrides
+  }
+
+  const merged: ParameterOverrides = { ...existingOverrides }
+
+  // Merge country overrides
+  if (newOverrides.country) {
+    merged.country = {
+      ...existingOverrides.country,
+      ...newOverrides.country,
+    }
+  }
+
+  return merged
+}
+
+/**
+ * Remove specific country override
+ */
+export function removeCountryOverride(overrides: ParameterOverrides, countryCode: string): ParameterOverrides {
+  const updated = { ...overrides }
+
+  if (updated.country) {
+    const { [countryCode.toUpperCase()]: removed, ...remaining } = updated.country
+    updated.country = remaining
+  }
+
+  return updated
+}
+
+/**
+ * Set specific country override
+ */
+export function setCountryOverride(overrides: ParameterOverrides, countryCode: string, value: any): ParameterOverrides {
+  const updated = { ...overrides }
+
+  if (!updated.country) {
+    updated.country = {}
+  }
+
+  updated.country[countryCode.toUpperCase()] = value
+
+  return updated
+}
+
+/**
+ * Validate country override operation
+ */
+export function validateCountryOverrideOperation(
+  countryCode: string,
+  value?: any,
+  operation: "set" | "delete" = "set"
+): void {
+  // Validate country code format
+  if (!countryCode || !/^[A-Z]{2}$/.test(countryCode.toUpperCase())) {
+    throw new ValidationError("Invalid country code format. Must be 2 uppercase letters.", "countryCode")
+  }
+
+  // Validate value for set operations
+  if (operation === "set" && value === undefined) {
+    throw new ValidationError("Value is required for setting country override", "value")
+  }
+}
+
+/**
+ * Check if a parameter key already exists
+ */
+export async function checkParameterKeyExists(
+  key: string,
+  excludeId?: string
+): Promise<{
+  exists: boolean
+  existingParameter?: { id: string; key: string }
+}> {
+  try {
+    const query = db.collection(FIRESTORE_COLLECTIONS.PARAMETERS).where("key", "==", key)
+    const snapshot = await query.get()
+
+    if (snapshot.empty) {
+      return { exists: false }
+    }
+
+    // If we're updating a parameter, exclude the current parameter from the check
+    const existingDocs = snapshot.docs.filter((doc) => doc.id !== excludeId)
+
+    if (existingDocs.length === 0) {
+      return { exists: false }
+    }
+
+    // Get the first existing document (we know length > 0)
+    const existingDoc = existingDocs[0]!
+    return {
+      exists: true,
+      existingParameter: {
+        id: existingDoc.id,
+        key: existingDoc.data().key,
+      },
+    }
+  } catch (error) {
+    logger.errorWithContext("Error checking parameter key existence", error, { key })
+    throw new DatabaseError(`Failed to check parameter key existence: ${key}`, "key_check")
+  }
 }
