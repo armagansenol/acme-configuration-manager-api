@@ -1,50 +1,56 @@
 import { QueryDocumentSnapshot, Transaction } from "firebase-admin/firestore"
 import { admin, db } from "../config/firebase"
-import { AuthenticatedRequest, ExpressController, FIRESTORE_COLLECTIONS } from "../types"
+import {
+  AuthenticatedRequest,
+  ExpressController,
+  FIRESTORE_COLLECTIONS,
+  ConflictError,
+  ParameterNotFoundError,
+  DatabaseError,
+  ValidationError,
+} from "../types"
 import { logger } from "../utils/logger"
-import { resolveParameterValue, prepareParameterForStorage, ParameterData } from "../utils/parameterUtils"
+import { resolveUserIdToEmail } from "../utils/userUtils"
+import {
+  resolveParameterValue,
+  prepareParameterForStorage,
+  ParameterData,
+  incrementVersion,
+} from "../utils/parameterUtils"
+import {
+  buildConfigurationObject,
+  detectConflictingFields,
+  createParameterObject,
+  fetchParameterDocument,
+  executeTransactionWithTimeout,
+  getParametersCollectionRef,
+  validateParameterOperationPermissions,
+  sanitizeParameterForResponse,
+} from "../utils/configHelpers"
+import { cacheService, CacheKeys } from "../services/cacheService"
+import { isCustomError } from "../types/errors"
 
-// Helper function to build configuration object from parameters
-function buildConfigurationObject(docs: QueryDocumentSnapshot[], country?: string): Record<string, any> {
-  const config: Record<string, any> = {}
+// Moved to utils/configHelpers.ts
 
-  docs.forEach((doc: QueryDocumentSnapshot) => {
-    const data = doc.data()
-
-    // Validate required fields and check if active
-    if (!data || typeof data.key !== "string" || data.isActive === false) {
-      logger.warn(`Skipping invalid or inactive parameter document: ${doc.id}`)
-      return
-    }
-
-    const parameterData: ParameterData = {
-      id: doc.id,
-      key: data.key,
-      value: data.value,
-      description: data.description,
-      overrides: data.overrides,
-      isActive: data.isActive,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
-      lastUpdatedBy: data.lastUpdatedBy,
-    }
-
-    const key = parameterData.key
-    const value = resolveParameterValue(parameterData, country)
-    config[key] = value
-  })
-
-  return config
-}
-
-// Mobile client configuration endpoint - gets parameters and resolves overrides
+// Mobile client configuration endpoint - gets parameters and resolves overrides with caching
 export const getClientConfig: ExpressController = async (req, res) => {
   try {
     const { country } = req.query // Get country from query parameters
+    const cacheKey = CacheKeys.CLIENT_CONFIG(country as string)
+
     logger.database("Fetching client configuration")
 
-    const parametersSnapshot = await db.collection(FIRESTORE_COLLECTIONS.PARAMETERS).get()
-    const config = buildConfigurationObject(parametersSnapshot.docs, country as string)
+    // Try to get from cache first
+    const config = await cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        logger.database("Cache miss - fetching from database")
+        const query = getParametersCollectionRef({ activeOnly: true })
+        const parametersSnapshot = await query.get()
+        return buildConfigurationObject(parametersSnapshot.docs, country as string)
+      },
+      5 * 60 // 5 minutes TTL
+    )
 
     logger.api(
       `Client configuration retrieved with ${Object.keys(config).length} parameters${
@@ -53,40 +59,15 @@ export const getClientConfig: ExpressController = async (req, res) => {
     )
     res.status(200).json(config)
   } catch (error) {
+    if (isCustomError(error)) {
+      throw error
+    }
     logger.errorWithContext("Error fetching client configuration", error)
     res.status(500).json({ error: "Internal server error", message: "Error fetching configuration." })
   }
 }
 
-// Helper function to create parameter object
-function createParameterObject(body: any, uid: string, isUpdate = false): any {
-  const { key, value, description, overrides } = body
-
-  // Prepare the basic parameter data
-  const parameterData: ParameterData = {
-    key,
-    value,
-    description,
-    overrides: overrides || {},
-  }
-
-  // Use utility to ensure proper migration and consistency
-  const preparedData = prepareParameterForStorage(parameterData)
-
-  // Add metadata
-  const finalData: any = {
-    ...preparedData,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    lastUpdatedBy: uid,
-    isActive: preparedData.isActive !== undefined ? preparedData.isActive : true,
-  }
-
-  if (!isUpdate) {
-    finalData.createdAt = admin.firestore.FieldValue.serverTimestamp()
-  }
-
-  return finalData
-}
+// Helper functions moved to utils/configHelpers.ts
 
 export const getParameters: ExpressController = async (req, res) => {
   try {
@@ -107,6 +88,46 @@ export const getParameters: ExpressController = async (req, res) => {
   }
 }
 
+export const getParameter: ExpressController = async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!id) {
+      throw new ValidationError("Parameter ID is required", "id")
+    }
+
+    logger.database(`Fetching parameter ${id}`)
+
+    const { doc, data } = await fetchParameterDocument(id)
+
+    const parameter = {
+      id: doc.id,
+      ...data,
+    }
+
+    logger.api(`Parameter retrieved: ${parameter.key} (version: ${parameter.version})`)
+    logger.debug(`Parameter data for ${id}:`, JSON.stringify(parameter, null, 2))
+
+    res.json({ parameter })
+  } catch (error: unknown) {
+    logger.errorWithContext("Error fetching parameter", error, { id: req.params.id || "unknown" })
+
+    if (error instanceof ParameterNotFoundError || error instanceof ValidationError) {
+      res.status(error.statusCode).json({
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        path: req.path,
+      })
+      return
+    }
+
+    res.status(500).json({
+      error: "Internal server error while fetching parameter",
+      timestamp: new Date().toISOString(),
+      path: req.path,
+    })
+  }
+}
+
 export const addParameter: ExpressController = async (req, res) => {
   try {
     const { uid } = (req as AuthenticatedRequest).user!
@@ -120,6 +141,7 @@ export const addParameter: ExpressController = async (req, res) => {
       {
         parameterId: docRef.id,
         parameterKey: req.body.key,
+        version: 0,
       },
       uid
     )
@@ -143,8 +165,9 @@ export const updateParameter: ExpressController = async (req, res) => {
     }
 
     const { uid } = (req as AuthenticatedRequest).user!
+    const { lastKnownVersion, forceUpdate = false, ...updateData } = req.body
 
-    logger.database("Updating parameter")
+    logger.database(`Updating parameter ${id} with version check`)
     const parameterRef = db.collection(FIRESTORE_COLLECTIONS.PARAMETERS).doc(id)
 
     await db.runTransaction(async (transaction: Transaction) => {
@@ -154,22 +177,47 @@ export const updateParameter: ExpressController = async (req, res) => {
         throw new Error("Parameter not found.")
       }
 
-      const existingData = doc.data()
-      if (!existingData) {
-        throw new Error("Parameter data is empty.")
+      const existingData = doc.data()!
+      const currentVersion = existingData.version || 0
+
+      // Version-based conflict detection (Strategy 1: Check only on save)
+      if (lastKnownVersion !== undefined && lastKnownVersion !== currentVersion && !forceUpdate) {
+        // Resolve the user ID to email for better conflict details
+        const lastModifiedByEmail = await resolveUserIdToEmail(existingData.lastUpdatedBy || "")
+
+        logger.securityEvent(
+          "Version Conflict Detected",
+          {
+            parameterId: id,
+            providedVersion: lastKnownVersion,
+            currentVersion: currentVersion,
+            lastModifiedBy: lastModifiedByEmail,
+            lastModifiedById: existingData.lastUpdatedBy,
+            userId: uid,
+          },
+          "medium"
+        )
+
+        throw new ConflictError("Configuration has been modified by another user", {
+          currentVersion,
+          providedVersion: lastKnownVersion,
+          lastModifiedBy: lastModifiedByEmail,
+          lastModifiedAt: existingData.updatedAt,
+          conflictingFields: detectConflictingFields(updateData, existingData),
+        })
       }
 
-      logger.database("Processing parameter update")
+      logger.database(`Version check passed: ${lastKnownVersion} -> ${currentVersion + 1}`)
 
       // Merge existing overrides with new data to preserve overrides
       const mergedRequestBody = {
-        ...req.body,
+        ...updateData,
         // Preserve existing overrides if not provided in the update request
-        overrides: req.body.overrides !== undefined ? req.body.overrides : existingData.overrides || {},
+        overrides: updateData.overrides !== undefined ? updateData.overrides : existingData.overrides || {},
       }
 
-      // Update the parameter with new timestamp
-      const updatedParameter = createParameterObject(mergedRequestBody, uid, true)
+      // Update the parameter with new timestamp and incremented version
+      const updatedParameter = createParameterObject(mergedRequestBody, uid, true, currentVersion)
       transaction.update(parameterRef, updatedParameter)
     })
 
@@ -177,13 +225,38 @@ export const updateParameter: ExpressController = async (req, res) => {
       "Parameter Updated",
       {
         parameterId: id,
-        parameterKey: req.body.key,
+        parameterKey: updateData.key,
+        versionIncrement: `${lastKnownVersion || "unknown"} -> ${(lastKnownVersion || 0) + 1}`,
+        forceUpdate: forceUpdate,
       },
       uid
     )
 
-    res.status(200).json({ message: "Parameter updated successfully." })
+    res.status(200).json({
+      message: "Parameter updated successfully.",
+      newVersion: (lastKnownVersion || 0) + 1,
+    })
   } catch (error) {
+    // Handle conflict errors specifically
+    if (error instanceof ConflictError) {
+      logger.userAction("Update Conflict", (req as AuthenticatedRequest).user?.uid || "unknown", {
+        parameterId: req.params.id,
+        conflictDetails: error.details,
+      })
+
+      res.status(409).json({
+        error: "Conflict",
+        message: error.message,
+        conflictDetails: error.details,
+        resolutionOptions: {
+          forceUpdate: "Override changes and update anyway (set forceUpdate: true)",
+          fetchLatest: "Get latest version and retry with correct lastKnownVersion",
+          cancel: "Cancel the update operation",
+        },
+      })
+      return
+    }
+
     logger.errorWithContext("Error updating parameter", error, { id: req.params.id || "unknown" })
     if (error instanceof Error) {
       if (error.message === "Parameter not found.") {
@@ -199,49 +272,44 @@ export const deleteParameter: ExpressController = async (req, res) => {
   try {
     const { id } = req.params
     if (!id) {
-      res.status(400).json({ error: "Bad request", message: "Parameter ID is required" })
+      throw new ValidationError("Parameter ID is required", "id")
+    }
+
+    logger.database("Deleting parameter")
+
+    const user = (req as AuthenticatedRequest).user
+    if (!user) {
+      res.status(401).json({ error: "User not authenticated" })
       return
     }
 
-    // uid not needed for deletion operation
+    const { doc, data } = await fetchParameterDocument(id)
 
-    logger.database("Deleting parameter")
-    const parameterRef = db.collection(FIRESTORE_COLLECTIONS.PARAMETERS).doc(id)
+    logger.database("Processing parameter deletion")
 
-    let parameterKey = "unknown"
-    await db.runTransaction(async (transaction: Transaction) => {
-      const doc = await transaction.get(parameterRef)
-
-      if (!doc.exists) {
-        throw new Error("Parameter not found.")
-      }
-
-      const existingData = doc.data()
-      if (!existingData) {
-        throw new Error("Parameter data is empty.")
-      }
-
-      parameterKey = existingData.key || "unknown"
-      logger.database("Processing parameter deletion")
-
-      // Delete the parameter
-      transaction.delete(parameterRef)
+    await executeTransactionWithTimeout(async (transaction) => {
+      transaction.delete(doc.ref)
     })
 
-    logger.audit("Parameter Deleted", {
-      parameterId: id,
-      parameterKey: parameterKey,
-    })
+    logger.audit("Parameter Deleted", { key: data.key, id, deletedBy: user.email || user.uid }, user.uid)
 
-    res.status(200).json({ message: "Parameter deleted successfully." })
-  } catch (error) {
+    res.json({ message: "Parameter deleted successfully" })
+  } catch (error: unknown) {
     logger.errorWithContext("Error deleting parameter", error, { id: req.params.id || "unknown" })
-    if (error instanceof Error) {
-      if (error.message === "Parameter not found.") {
-        res.status(404).json({ error: "Not found", message: error.message })
-        return
-      }
+
+    if (error instanceof ParameterNotFoundError || error instanceof ValidationError || error instanceof DatabaseError) {
+      res.status(error.statusCode).json({
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        path: req.path,
+      })
+      return
     }
-    res.status(500).json({ error: "Internal server error", message: "Error deleting parameter." })
+
+    res.status(500).json({
+      error: "Internal server error while deleting parameter",
+      timestamp: new Date().toISOString(),
+      path: req.path,
+    })
   }
 }

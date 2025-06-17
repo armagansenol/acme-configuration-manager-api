@@ -2,6 +2,7 @@ import { Router } from "express"
 import {
   getClientConfig,
   getParameters,
+  getParameter,
   addParameter,
   updateParameter,
   deleteParameter,
@@ -17,19 +18,33 @@ import {
   deleteParameterSchema,
   idParamSchema,
   querySchema,
+  generalApiLimiter,
+  adminApiLimiter,
+  clientConfigLimiter,
+  sensitiveOperationLimiter,
+  defaultRequestLogger,
+  performanceLoggingMiddleware,
 } from "../middleware"
 
 const router = Router()
 
+// Apply logging and performance monitoring middleware
+router.use(defaultRequestLogger)
+router.use(performanceLoggingMiddleware(2000)) // Log requests slower than 2 seconds
+
 // Get all configuration parameters - Admin only
-router.get("/parameters", verifyFirebaseToken, validateQuery(querySchema), getParameters)
+router.get("/parameters", adminApiLimiter, verifyFirebaseToken, validateQuery(querySchema), getParameters)
+
+// Get a single configuration parameter by ID - Admin only
+router.get("/parameters/:id", adminApiLimiter, verifyFirebaseToken, validateParams(idParamSchema), getParameter)
 
 // Create a new configuration parameter - Admin only
-router.post("/parameters", verifyFirebaseToken, validateBody(parameterSchema), addParameter)
+router.post("/parameters", adminApiLimiter, verifyFirebaseToken, validateBody(parameterSchema), addParameter)
 
 // Update an existing configuration parameter - Admin only
 router.put(
   "/parameters/:id",
+  adminApiLimiter,
   verifyFirebaseToken,
   validateParams(idParamSchema),
   validateBody(updateParameterSchema),
@@ -39,6 +54,7 @@ router.put(
 // Delete a configuration parameter - Admin only
 router.delete(
   "/parameters/:id",
+  sensitiveOperationLimiter,
   verifyFirebaseToken,
   validateParams(idParamSchema),
   validateBody(deleteParameterSchema),
@@ -46,6 +62,6 @@ router.delete(
 )
 
 // Get client configuration with resolved parameter values - Mobile API
-router.get("/client-config", verifyApiKey, validateQuery(querySchema), getClientConfig)
+router.get("/client-config", clientConfigLimiter, verifyApiKey, validateQuery(querySchema), getClientConfig)
 
 export default router
