@@ -96,10 +96,15 @@ The `.env` file is used to configure the application. Refer to `env.example` for
 PORT=3000
 NODE_ENV=development
 
-# Firebase Admin SDK (as a single line JSON string or separate variables)
+# Firebase Admin SDK (as separate environment variables)
 FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY_ID=your-private-key-id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----\n"
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+FIREBASE_CLIENT_ID=your-client-id
+FIREBASE_AUTH_URI=https://accounts.google.com/o/oauth2/auth
+FIREBASE_TOKEN_URI=https://oauth2.googleapis.com/token
+FIREBASE_CLIENT_CERT_URL=https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-xxxxx%40your-project.iam.gserviceaccount.com
 
 # Security
 CLIENT_CONFIG_API_KEY=your-secret-api-key-minimum-32-characters-long
@@ -107,15 +112,27 @@ ALLOWED_ORIGINS=http://localhost:5173,https://your-frontend-domain.com
 
 # Redis Caching
 REDIS_URL=redis://localhost:6379
+
+# Rate Limiting (optional - has sensible defaults)
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Debug Mode (development only)
+DEBUG=true
 ```
 
 ### Available Scripts
 
 - `npm run dev`: Starts the development server with hot-reloading using `ts-node` and Node's `--watch` flag.
+- `npm run dev:legacy`: Legacy development server using ts-node with dotenv (fallback option).
 - `npm start`: Starts the production-ready server from the compiled JavaScript files in `dist/`. Requires `npm run build` to be run first.
 - `npm run build`: Compiles the TypeScript source code into JavaScript in the `dist/` directory.
+- `npm run vercel-build`: Build command optimized for Vercel deployment (alias for `npm run build`).
 - `npm run lint`: Lints the source code using ESLint to check for code quality and style issues.
 - `npm run lint:fix`: Lints the code and automatically fixes issues where possible.
+- `npm run clean`: Removes the `dist/` directory to ensure clean builds.
+- `npm run test:conflict`: Runs conflict detection tests to verify optimistic locking functionality.
+- `npm run test:all`: Runs comprehensive feature tests across all API endpoints.
 
 ## 🔐 Authentication & Security
 
@@ -308,11 +325,14 @@ services:
 
 ```bash
 npm run dev          # Development server with hot reload
+npm run dev:legacy   # Legacy development server (fallback)
 npm run build        # Production build
+npm run vercel-build # Vercel-optimized build
 npm run start        # Start production server
 npm run lint         # Run ESLint
 npm run lint:fix     # Fix linting issues
-npm run test         # Run test suite (when implemented)
+npm run test:conflict # Test conflict detection
+npm run test:all     # Run all feature tests
 npm run clean        # Clean build directory
 ```
 
